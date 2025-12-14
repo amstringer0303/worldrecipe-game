@@ -1,65 +1,226 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+
+// ============================================
+// Animated Background
+// ============================================
+function AnimatedBackground() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="fixed inset-0 -z-10 overflow-hidden">
+      {/* Gradient base */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460]" />
+      
+      {/* Floating elements */}
+      <div className="absolute inset-0">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute rounded-full opacity-20"
+            style={{
+              width: `${20 + Math.random() * 40}px`,
+              height: `${20 + Math.random() * 40}px`,
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              background: `linear-gradient(135deg, ${
+                ['#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181'][Math.floor(Math.random() * 5)]
+              }, transparent)`,
+              animation: `float ${5 + Math.random() * 10}s ease-in-out infinite`,
+              animationDelay: `${Math.random() * 5}s`,
+            }}
+          />
+        ))}
+      </div>
+      
+      {/* Vignette overlay */}
+      <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/50" />
+    </div>
+  );
+}
+
+// ============================================
+// Logo Component
+// ============================================
+function Logo() {
+  return (
+    <div className="text-center mb-8 animate-in fade-in slide-in-from-top duration-700">
+      <div className="inline-block mb-4">
+        <span className="text-6xl">🍳</span>
+      </div>
+      <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight">
+        <span className="bg-gradient-to-r from-[#FF6B6B] via-[#FFE66D] to-[#4ECDC4] bg-clip-text text-transparent">
+          World Recipe
+        </span>
+      </h1>
+      <p className="text-xl text-muted-foreground mt-3 font-medium">
+        A Cozy Culinary Adventure
+      </p>
+    </div>
+  );
+}
+
+// ============================================
+// Feature Card
+// ============================================
+function FeatureCard({ emoji, title, description }: { emoji: string; title: string; description: string }) {
+  return (
+    <Card className="bg-card/80 backdrop-blur-sm border-border/50 hover:border-primary/50 transition-all duration-300 hover:scale-105">
+      <CardContent className="p-4 text-center">
+        <span className="text-3xl block mb-2">{emoji}</span>
+        <h3 className="font-semibold text-foreground">{title}</h3>
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================
+// Dish Preview Card
+// ============================================
+function DishPreviewCard({ 
+  name, 
+  origin, 
+  difficulty, 
+  emoji,
+  selected,
+  onClick 
+}: { 
+  name: string; 
+  origin: string; 
+  difficulty: 'easy' | 'medium' | 'hard';
+  emoji: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const difficultyColors = {
+    easy: 'bg-green-500/20 text-green-400',
+    medium: 'bg-yellow-500/20 text-yellow-400',
+    hard: 'bg-red-500/20 text-red-400',
+  };
+  
+  return (
+    <Card 
+      className={`cursor-pointer transition-all duration-300 hover:scale-105 ${
+        selected 
+          ? 'ring-2 ring-primary bg-card/90 border-primary' 
+          : 'bg-card/60 backdrop-blur-sm border-border/50 hover:border-primary/50'
+      }`}
+      onClick={onClick}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3">
+          <span className="text-4xl">{emoji}</span>
+          <div className="flex-1">
+            <h3 className="font-semibold text-foreground">{name}</h3>
+            <p className="text-xs text-muted-foreground">{origin}</p>
+          </div>
+          <Badge className={difficultyColors[difficulty]} variant="secondary">
+            {difficulty}
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================
+// Main Menu
+// ============================================
+export default function MainMenu() {
+  const router = useRouter();
+  const [selectedDish, setSelectedDish] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const featuredDishes = [
+    { id: 'ramen', name: 'Tonkotsu Ramen', origin: 'Japan', difficulty: 'medium' as const, emoji: '🍜' },
+    { id: 'tagine', name: 'Lamb Tagine', origin: 'Morocco', difficulty: 'hard' as const, emoji: '🍲' },
+    { id: 'tacos', name: 'Street Tacos', origin: 'Mexico', difficulty: 'easy' as const, emoji: '🌮' },
+    { id: 'pho', name: 'Beef Pho', origin: 'Vietnam', difficulty: 'medium' as const, emoji: '🥢' },
+  ];
+  
+  const handleStartGame = () => {
+    setIsLoading(true);
+    // In production, this would generate a world first
+    setTimeout(() => {
+      router.push('/game');
+    }, 500);
+  };
+  
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center p-8 relative">
+      <AnimatedBackground />
+      
+      <div className="max-w-4xl w-full space-y-8">
+        <Logo />
+        
+        {/* Feature highlights */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
+          <FeatureCard emoji="🗺️" title="Explore" description="Visit themed regions" />
+          <FeatureCard emoji="👥" title="Befriend" description="Meet unique NPCs" />
+          <FeatureCard emoji="🥬" title="Gather" description="Collect ingredients" />
+          <FeatureCard emoji="🍳" title="Cook" description="Master recipes" />
+        </div>
+        
+        {/* Dish selection */}
+        <Card className="bg-card/80 backdrop-blur-sm border-border/50 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Choose Your Adventure</CardTitle>
+            <CardDescription>Select a dish to begin your culinary journey</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {featuredDishes.map((dish) => (
+                <DishPreviewCard
+                  key={dish.id}
+                  {...dish}
+                  selected={selectedDish === dish.id}
+                  onClick={() => setSelectedDish(dish.id)}
+                />
+              ))}
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              <Button
+                size="lg"
+                className="flex-1 h-14 text-lg font-semibold"
+                disabled={!selectedDish || isLoading}
+                onClick={handleStartGame}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Generating World...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    🚀 Start New Adventure
+                  </span>
+                )}
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-14"
+                onClick={() => router.push('/game')}
+              >
+                Continue
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Footer info */}
+        <div className="text-center text-sm text-muted-foreground animate-in fade-in duration-700 delay-500">
+          <p>🎮 WASD to move • E to interact • ESC to pause</p>
+          <p className="mt-2 text-xs opacity-60">
+            Powered by AI-generated content • Built with Next.js & React Three Fiber
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

@@ -1,0 +1,352 @@
+import { z } from 'zod';
+
+// ============================================
+// World Recipe - Zod Schemas for AI Generation
+// ============================================
+
+// Time of day enum
+export const timeOfDaySchema = z.enum(['morning', 'day', 'evening', 'night']);
+
+// Rarity enum
+export const raritySchema = z.enum(['common', 'uncommon', 'rare', 'legendary']);
+
+// Difficulty enum
+export const difficultySchema = z.enum(['easy', 'medium', 'hard']);
+
+// ============================================
+// Item Schemas
+// ============================================
+
+export const itemSchema = z.object({
+  itemId: z.string().describe('Unique identifier for the item'),
+  name: z.string().describe('Display name of the item'),
+  description: z.string().describe('Brief description of the item'),
+  category: z.enum(['ingredient', 'tool', 'souvenir', 'clothing', 'decor']),
+  icon: z.string().optional().describe('Emoji or icon identifier'),
+  rarity: raritySchema,
+});
+
+export const itemStackSchema = z.object({
+  item: itemSchema,
+  quantity: z.number().int().positive(),
+});
+
+// ============================================
+// Ingredient Schemas
+// ============================================
+
+export const ingredientNodeSchema = z.object({
+  ingredientId: z.string().describe('Unique identifier'),
+  name: z.string().describe('Name of the ingredient'),
+  category: z.string().describe('Category like vegetable, protein, spice'),
+  regionId: z.string().describe('Which region this ingredient is found in'),
+  gatherMethod: z.enum(['pickup', 'harvest', 'fish', 'trade', 'craft']),
+});
+
+export const dependencyEdgeSchema = z.object({
+  from: z.string().describe('Source ingredient or quest ID'),
+  to: z.string().describe('Target ingredient or quest ID'),
+  type: z.enum(['requires', 'unlocks', 'substitute']),
+});
+
+export const ingredientGraphSchema = z.object({
+  ingredients: z.array(ingredientNodeSchema).min(6).max(20),
+  dependencies: z.array(dependencyEdgeSchema),
+});
+
+// ============================================
+// NPC Schemas
+// ============================================
+
+export const npcPersonalitySchema = z.object({
+  archetype: z.string().describe('Character archetype like Mentor, Trickster, Sage'),
+  traits: z.array(z.string()).min(2).max(5).describe('Personality traits'),
+  speakingStyle: z.string().describe('How they talk - formal, casual, poetic, etc'),
+  likes: z.array(z.string()).min(1).max(3),
+  dislikes: z.array(z.string()).min(1).max(3),
+});
+
+export const npcVisualSchema = z.object({
+  paletteOverrides: z.record(z.string(), z.string()).optional(),
+  outfitTags: z.array(z.string()).describe('Tags describing clothing style'),
+  accessoryTags: z.array(z.string()).describe('Tags for accessories'),
+});
+
+export const scheduleEntrySchema = z.object({
+  timeOfDay: timeOfDaySchema,
+  locationId: z.string().describe('POI ID where NPC will be'),
+  activity: z.string().describe('What they are doing'),
+});
+
+export const npcSchema = z.object({
+  npcId: z.string().describe('Unique identifier'),
+  name: z.string().describe('NPC name - culturally appropriate but fictional'),
+  speciesStyle: z.string().describe('Visual style - cozy animal or person style'),
+  personality: npcPersonalitySchema,
+  role: z.object({
+    job: z.string().describe('Their profession'),
+    services: z.array(z.string()).describe('What services they offer'),
+  }),
+  schedule: z.array(scheduleEntrySchema).min(2).max(4),
+  relationship: z.object({
+    startingLevel: z.number().int().min(0).max(3),
+    maxLevel: z.number().int().min(5).max(10),
+    levelRewards: z.array(z.string()).describe('What unlocks at each level'),
+  }),
+  questHooks: z.array(z.string()).describe('Quest arc IDs this NPC is involved in'),
+  visual: npcVisualSchema,
+});
+
+// ============================================
+// Dialogue Schemas
+// ============================================
+
+export const dialogueChoiceSchema = z.object({
+  text: z.string().describe('The choice text shown to player'),
+  nextNodeId: z.string().optional().describe('ID of next dialogue node'),
+  effect: z.object({
+    type: z.enum(['relationship', 'quest', 'trade', 'hint']),
+    value: z.union([z.string(), z.number()]),
+  }).optional(),
+});
+
+export const dialogueNodeSchema = z.object({
+  nodeId: z.string(),
+  speaker: z.string().describe('NPC name or "player"'),
+  text: z.string().describe('The dialogue text'),
+  choices: z.array(dialogueChoiceSchema).optional(),
+  tags: z.array(z.string()).optional().describe('Tags like quest_offer, farewell'),
+});
+
+export const dialoguePackSchema = z.object({
+  greeting: z.array(dialogueNodeSchema).min(1).max(3),
+  questOffer: z.array(dialogueNodeSchema).optional(),
+  questProgress: z.array(dialogueNodeSchema).optional(),
+  relationshipEvents: z.array(dialogueNodeSchema).optional(),
+  general: z.array(dialogueNodeSchema).min(2).max(5),
+});
+
+// ============================================
+// Quest Schemas
+// ============================================
+
+export const objectiveTypeSchema = z.enum(['gather', 'deliver', 'talk', 'craft', 'cook-step']);
+
+export const questObjectiveSchema = z.object({
+  objectiveId: z.string(),
+  type: objectiveTypeSchema,
+  description: z.string().describe('Human readable objective'),
+  target: z.string().describe('Item ID, NPC ID, or step ID'),
+  quantity: z.number().int().optional().default(1),
+  completed: z.boolean().default(false),
+});
+
+export const questChapterSchema = z.object({
+  questId: z.string(),
+  title: z.string().describe('Quest title'),
+  description: z.string().describe('Quest description'),
+  giverNpcId: z.string().describe('NPC who gives this quest'),
+  objectives: z.array(questObjectiveSchema).min(1).max(5),
+  rewards: z.array(itemStackSchema),
+  nextQuestId: z.string().optional().describe('Next quest in chain'),
+});
+
+export const questArcSchema = z.object({
+  arcId: z.string(),
+  title: z.string().describe('Arc title like "The Secret Spice"'),
+  chapters: z.array(questChapterSchema).min(1).max(5),
+  unlocksCookingStepId: z.string().optional(),
+});
+
+// ============================================
+// Cooking Schemas
+// ============================================
+
+export const cookingStepSchema = z.object({
+  stepId: z.string(),
+  name: z.string().describe('Step name like "Prepare Broth"'),
+  description: z.string().describe('What this step involves'),
+  technique: z.string().describe('Cooking technique used'),
+  requiredIngredients: z.array(z.object({
+    ingredientId: z.string(),
+    quantity: z.number().int().positive(),
+    substitutes: z.array(z.string()).optional(),
+  })),
+  miniGameType: z.enum(['stir', 'chop', 'toast', 'none']).optional(),
+  unlocked: z.boolean().default(false),
+  completed: z.boolean().default(false),
+});
+
+export const dishSchema = z.object({
+  name: z.string().describe('Name of the dish'),
+  tagline: z.string().describe('Catchy tagline'),
+  inspirations: z.array(z.string()).min(1).max(3).describe('Cultural inspirations'),
+  dietaryTags: z.array(z.string()).describe('Tags like vegetarian, gluten-free'),
+  difficulty: difficultySchema,
+  storyHook: z.string().describe('Narrative hook for why we are cooking this'),
+});
+
+// ============================================
+// Map and Region Schemas
+// ============================================
+
+export const poiTypeSchema = z.enum([
+  'market', 'dock', 'shrine', 'farm', 'kitchen_hut', 'npc_home', 'gathering_spot'
+]);
+
+export const poiSchema = z.object({
+  poiId: z.string(),
+  type: poiTypeSchema,
+  name: z.string().describe('Name of the location'),
+  position: z.tuple([z.number(), z.number()]).describe('Grid position [x, y]'),
+  interactRadius: z.number().positive().default(2),
+});
+
+export const mapSpecSchema = z.object({
+  grid: z.object({
+    width: z.number().int().min(20).max(100),
+    height: z.number().int().min(20).max(100),
+    cellSize: z.number().positive().default(1),
+  }),
+  terrain: z.object({
+    waterBodies: z.array(z.object({
+      position: z.tuple([z.number(), z.number()]),
+      size: z.tuple([z.number(), z.number()]),
+    })),
+    elevationHints: z.array(z.object({
+      position: z.tuple([z.number(), z.number()]),
+      height: z.number(),
+    })),
+    paths: z.array(z.object({
+      from: z.tuple([z.number(), z.number()]),
+      to: z.tuple([z.number(), z.number()]),
+    })),
+  }),
+  pois: z.array(poiSchema).min(3).max(15),
+  spawnPoints: z.object({
+    player: z.tuple([z.number(), z.number()]),
+    npcSpawns: z.array(z.object({
+      npcId: z.string(),
+      position: z.tuple([z.number(), z.number()]),
+    })),
+  }),
+  decorRules: z.object({
+    density: z.number().min(0).max(1).describe('0-1 density of decorations'),
+    propThemes: z.array(z.string()).describe('Themes like forest, coastal, urban'),
+  }),
+});
+
+export const paletteSchema = z.object({
+  primary: z.string().describe('Primary color hex'),
+  secondary: z.string().describe('Secondary color hex'),
+  accent: z.string().describe('Accent color hex'),
+  ground: z.string().describe('Ground/terrain color hex'),
+  foliage: z.string().describe('Foliage/plant color hex'),
+  sky: z.string().describe('Sky color hex'),
+  uiBg: z.string().describe('UI background color hex'),
+  uiText: z.string().describe('UI text color hex'),
+});
+
+export const regionInspirationSchema = z.object({
+  countryOrArea: z.string().describe('Fictionalized country/area inspiration'),
+  notes: z.string().describe('Design notes'),
+  avoidStereotypesChecklist: z.array(z.string()).describe('Things to avoid'),
+});
+
+export const regionSpecSchema = z.object({
+  regionId: z.string(),
+  name: z.string().describe('Region name'),
+  inspiration: regionInspirationSchema,
+  biomes: z.array(z.string()).min(1).max(3).describe('Biome types'),
+  palette: paletteSchema,
+  mapSpec: mapSpecSchema,
+});
+
+// ============================================
+// World Recipe - Main Schema
+// ============================================
+
+export const worldRecipeSchema = z.object({
+  worldId: z.string().describe('Unique world identifier'),
+  seed: z.string().describe('Generation seed for reproducibility'),
+  dish: dishSchema,
+  regions: z.array(regionSpecSchema).min(2).max(5),
+  ingredientGraph: ingredientGraphSchema,
+  questArcs: z.array(questArcSchema).min(2).max(6),
+  npcRoster: z.array(npcSchema).min(8).max(20),
+  colorSystem: z.object({
+    uiTokens: z.record(z.string(), z.string()),
+    environmentTokens: z.record(z.string(), z.string()),
+  }),
+  startingInventory: z.array(itemStackSchema).default([]),
+});
+
+// ============================================
+// Dialogue Turn Schema (for streaming responses)
+// ============================================
+
+export const dialogueTurnSchema = z.object({
+  speaker: z.string(),
+  text: z.string(),
+  emotion: z.enum(['neutral', 'happy', 'sad', 'excited', 'thoughtful', 'worried']).optional(),
+  choices: z.array(z.object({
+    text: z.string(),
+    effect: z.object({
+      type: z.enum(['relationship', 'quest_accept', 'quest_progress', 'trade', 'hint', 'farewell']),
+      value: z.union([z.string(), z.number()]).optional(),
+    }).optional(),
+  })).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+// ============================================
+// Quest Resolution Schema
+// ============================================
+
+export const questResolutionSchema = z.object({
+  questId: z.string(),
+  success: z.boolean(),
+  message: z.string(),
+  stateUpdates: z.array(z.object({
+    type: z.enum(['objective_complete', 'quest_complete', 'unlock_step', 'reward']),
+    targetId: z.string(),
+    value: z.any().optional(),
+  })),
+  nextQuestId: z.string().optional(),
+});
+
+// ============================================
+// Type Exports
+// ============================================
+
+export type TimeOfDay = z.infer<typeof timeOfDaySchema>;
+export type Rarity = z.infer<typeof raritySchema>;
+export type Difficulty = z.infer<typeof difficultySchema>;
+export type Item = z.infer<typeof itemSchema>;
+export type ItemStack = z.infer<typeof itemStackSchema>;
+export type IngredientNode = z.infer<typeof ingredientNodeSchema>;
+export type DependencyEdge = z.infer<typeof dependencyEdgeSchema>;
+export type IngredientGraph = z.infer<typeof ingredientGraphSchema>;
+export type NPCPersonality = z.infer<typeof npcPersonalitySchema>;
+export type NPCVisual = z.infer<typeof npcVisualSchema>;
+export type ScheduleEntry = z.infer<typeof scheduleEntrySchema>;
+export type NPC = z.infer<typeof npcSchema>;
+export type DialogueChoice = z.infer<typeof dialogueChoiceSchema>;
+export type DialogueNode = z.infer<typeof dialogueNodeSchema>;
+export type DialoguePack = z.infer<typeof dialoguePackSchema>;
+export type ObjectiveType = z.infer<typeof objectiveTypeSchema>;
+export type QuestObjective = z.infer<typeof questObjectiveSchema>;
+export type QuestChapter = z.infer<typeof questChapterSchema>;
+export type QuestArc = z.infer<typeof questArcSchema>;
+export type CookingStep = z.infer<typeof cookingStepSchema>;
+export type Dish = z.infer<typeof dishSchema>;
+export type POIType = z.infer<typeof poiTypeSchema>;
+export type POI = z.infer<typeof poiSchema>;
+export type MapSpec = z.infer<typeof mapSpecSchema>;
+export type Palette = z.infer<typeof paletteSchema>;
+export type RegionInspiration = z.infer<typeof regionInspirationSchema>;
+export type RegionSpec = z.infer<typeof regionSpecSchema>;
+export type WorldRecipe = z.infer<typeof worldRecipeSchema>;
+export type DialogueTurn = z.infer<typeof dialogueTurnSchema>;
+export type QuestResolution = z.infer<typeof questResolutionSchema>;
+

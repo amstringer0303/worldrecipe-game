@@ -1,0 +1,280 @@
+// ============================================
+// World Recipe - Core Game Types
+// ============================================
+
+// Time of day cycle
+export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
+
+// Player state
+export interface PlayerState {
+  position: [number, number, number];
+  rotation: number;
+  velocity: [number, number, number];
+}
+
+// Item and inventory
+export interface Item {
+  itemId: string;
+  name: string;
+  description: string;
+  category: 'ingredient' | 'tool' | 'souvenir' | 'clothing' | 'decor';
+  icon?: string;
+  rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
+}
+
+export interface ItemStack {
+  item: Item;
+  quantity: number;
+}
+
+// Ingredient system
+export interface Ingredient extends Item {
+  category: 'ingredient';
+  origin: string; // Region where found
+  seasonality?: string[];
+  substitutes?: string[]; // IDs of substitute ingredients
+  flavorProfile?: string[];
+}
+
+// NPC system
+export interface NPCPersonality {
+  archetype: string;
+  traits: string[];
+  speakingStyle: string;
+  likes: string[];
+  dislikes: string[];
+}
+
+export interface NPCVisual {
+  paletteOverrides?: Record<string, string>;
+  outfitTags: string[];
+  accessoryTags: string[];
+}
+
+export interface ScheduleEntry {
+  timeOfDay: TimeOfDay;
+  locationId: string;
+  activity: string;
+}
+
+export interface NPC {
+  npcId: string;
+  name: string;
+  speciesStyle: string;
+  personality: NPCPersonality;
+  role: {
+    job: string;
+    services: string[];
+  };
+  schedule: ScheduleEntry[];
+  relationship: {
+    startingLevel: number;
+    maxLevel: number;
+    levelRewards: string[];
+  };
+  questHooks: string[];
+  visual: NPCVisual;
+}
+
+// Dialogue system
+export interface DialogueChoice {
+  text: string;
+  nextNodeId?: string;
+  effect?: {
+    type: 'relationship' | 'quest' | 'trade' | 'hint';
+    value: string | number;
+  };
+}
+
+export interface DialogueNode {
+  nodeId: string;
+  speaker: string;
+  text: string;
+  choices?: DialogueChoice[];
+  tags?: string[];
+}
+
+export interface DialoguePack {
+  greeting: DialogueNode[];
+  questOffer: DialogueNode[];
+  questProgress: DialogueNode[];
+  relationshipEvents: DialogueNode[];
+  general: DialogueNode[];
+}
+
+// Quest system
+export type ObjectiveType = 'gather' | 'deliver' | 'talk' | 'craft' | 'cook-step';
+
+export interface QuestObjective {
+  objectiveId: string;
+  type: ObjectiveType;
+  description: string;
+  target: string; // Item ID, NPC ID, or step ID
+  quantity?: number;
+  completed: boolean;
+}
+
+export interface QuestChapter {
+  questId: string;
+  title: string;
+  description: string;
+  giverNpcId: string;
+  objectives: QuestObjective[];
+  rewards: ItemStack[];
+  nextQuestId?: string;
+}
+
+export interface QuestArc {
+  arcId: string;
+  title: string;
+  chapters: QuestChapter[];
+  unlocksCookingStepId?: string;
+}
+
+// Cooking system
+export interface CookingStep {
+  stepId: string;
+  name: string;
+  description: string;
+  technique: string;
+  requiredIngredients: { ingredientId: string; quantity: number; substitutes?: string[] }[];
+  miniGameType?: 'stir' | 'chop' | 'toast' | 'none';
+  unlocked: boolean;
+  completed: boolean;
+}
+
+export interface Dish {
+  name: string;
+  tagline: string;
+  inspirations: string[];
+  dietaryTags: string[];
+  difficulty: 'easy' | 'medium' | 'hard';
+  storyHook: string;
+}
+
+// Map and region
+export interface POI {
+  poiId: string;
+  type: 'market' | 'dock' | 'shrine' | 'farm' | 'kitchen_hut' | 'npc_home' | 'gathering_spot';
+  name: string;
+  position: [number, number];
+  interactRadius: number;
+}
+
+export interface MapSpec {
+  grid: {
+    width: number;
+    height: number;
+    cellSize: number;
+  };
+  terrain: {
+    waterBodies: { position: [number, number]; size: [number, number] }[];
+    elevationHints: { position: [number, number]; height: number }[];
+    paths: { from: [number, number]; to: [number, number] }[];
+  };
+  pois: POI[];
+  spawnPoints: {
+    player: [number, number];
+    npcSpawns: { npcId: string; position: [number, number] }[];
+  };
+  decorRules: {
+    density: number;
+    propThemes: string[];
+  };
+}
+
+export interface Palette {
+  primary: string;
+  secondary: string;
+  accent: string;
+  ground: string;
+  foliage: string;
+  sky: string;
+  uiBg: string;
+  uiText: string;
+}
+
+export interface RegionInspiration {
+  countryOrArea: string;
+  notes: string;
+  avoidStereotypesChecklist: string[];
+}
+
+export interface RegionSpec {
+  regionId: string;
+  name: string;
+  inspiration: RegionInspiration;
+  biomes: string[];
+  palette: Palette;
+  mapSpec: MapSpec;
+}
+
+// Ingredient graph
+export interface IngredientNode {
+  ingredientId: string;
+  name: string;
+  category: string;
+  regionId: string;
+  gatherMethod: 'pickup' | 'harvest' | 'fish' | 'trade' | 'craft';
+}
+
+export interface DependencyEdge {
+  from: string;
+  to: string;
+  type: 'requires' | 'unlocks' | 'substitute';
+}
+
+export interface IngredientGraph {
+  ingredients: IngredientNode[];
+  dependencies: DependencyEdge[];
+}
+
+// World Recipe - main generated object
+export interface WorldRecipe {
+  worldId: string;
+  seed: string;
+  dish: Dish;
+  regions: RegionSpec[];
+  ingredientGraph: IngredientGraph;
+  questArcs: QuestArc[];
+  npcRoster: NPC[];
+  colorSystem: {
+    uiTokens: Record<string, string>;
+    environmentTokens: Record<string, string>;
+  };
+  startingInventory: ItemStack[];
+}
+
+// Game save state
+export interface GameSave {
+  saveId: string;
+  worldId: string;
+  playerPosition: [number, number, number];
+  currentRegionId: string;
+  inventory: ItemStack[];
+  completedQuests: string[];
+  activeQuests: QuestChapter[];
+  npcRelationships: Record<string, number>;
+  completedCookingSteps: string[];
+  timeOfDay: TimeOfDay;
+  dayNumber: number;
+  playTimeSeconds: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// UI state types
+export interface InteractionPrompt {
+  visible: boolean;
+  text: string;
+  targetId?: string;
+  targetType?: 'npc' | 'item' | 'poi';
+}
+
+export interface DialogueState {
+  active: boolean;
+  currentNpcId?: string;
+  currentNode?: DialogueNode;
+  history: DialogueNode[];
+}
+
