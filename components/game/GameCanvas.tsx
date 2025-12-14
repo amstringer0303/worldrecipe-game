@@ -1,8 +1,22 @@
 'use client';
 
-import { Suspense, useEffect, useCallback, useRef } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrthographicCamera, Grid } from '@react-three/drei';
+import { Suspense, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { 
+  Stars,
+  Float,
+  Sparkles,
+} from '@react-three/drei';
+import { 
+  EffectComposer, 
+  Bloom, 
+  Vignette, 
+  ChromaticAberration,
+  DepthOfField,
+  ToneMapping,
+  SMAA,
+} from '@react-three/postprocessing';
+import { BlendFunction, ToneMappingMode } from 'postprocessing';
 import { Physics, RigidBody, CuboidCollider } from '@react-three/rapier';
 import * as THREE from 'three';
 import { PlayerController } from './PlayerController';
@@ -14,60 +28,394 @@ import { useWorldStore } from '@/lib/store/worldStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
 
 // ============================================
-// Lighting Setup
+// Post-Processing Effects
 // ============================================
 
-function Lighting() {
+function PostProcessingEffects() {
+  const timeOfDay = useGameStore((s) => s.timeOfDay);
+  
+  const bloomIntensity = useMemo(() => {
+    switch (timeOfDay) {
+      case 'morning': return 0.4;
+      case 'day': return 0.3;
+      case 'evening': return 0.6;
+      case 'night': return 0.8;
+      default: return 0.4;
+    }
+  }, [timeOfDay]);
+  
+  return (
+    <EffectComposer multisampling={4}>
+      <SMAA />
+      <Bloom 
+        intensity={bloomIntensity}
+        luminanceThreshold={0.6}
+        luminanceSmoothing={0.9}
+        mipmapBlur
+        radius={0.8}
+      />
+      <Vignette 
+        offset={0.3} 
+        darkness={timeOfDay === 'night' ? 0.7 : 0.4} 
+        eskil={false}
+      />
+      <ChromaticAberration
+        blendFunction={BlendFunction.NORMAL}
+        offset={new THREE.Vector2(0.0005, 0.0005)}
+      />
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+    </EffectComposer>
+  );
+}
+
+// ============================================
+// Atmospheric Effects
+// ============================================
+
+function AtmosphericEffects() {
   const timeOfDay = useGameStore((s) => s.timeOfDay);
   const region = useWorldStore((s) => s.currentRegion);
   
-  const lightSettings = {
-    morning: { intensity: 0.8, color: '#FFF5E6', ambient: 0.4 },
-    day: { intensity: 1.0, color: '#FFFFFF', ambient: 0.5 },
-    evening: { intensity: 0.6, color: '#FFB366', ambient: 0.3 },
-    night: { intensity: 0.2, color: '#4169E1', ambient: 0.15 },
-  };
-  
-  const settings = lightSettings[timeOfDay];
-  const skyColor = region?.palette.sky || '#87CEEB';
+  const fogColor = useMemo(() => {
+    switch (timeOfDay) {
+      case 'morning': return '#FFE4C4';
+      case 'day': return '#87CEEB';
+      case 'evening': return '#FF8C69';
+      case 'night': return '#1a1a2e';
+      default: return '#87CEEB';
+    }
+  }, [timeOfDay]);
   
   return (
     <>
-      <ambientLight intensity={settings.ambient} />
+      {/* Ambient particles */}
+      <Sparkles 
+        count={100}
+        scale={40}
+        size={2}
+        speed={0.3}
+        opacity={timeOfDay === 'night' ? 0.8 : 0.3}
+        color={timeOfDay === 'night' ? '#FFD700' : '#FFFFFF'}
+      />
+      
+      {/* Floating dust particles */}
+      <Float speed={0.5} rotationIntensity={0} floatIntensity={0.5}>
+        <Sparkles 
+          count={50}
+          scale={20}
+          size={1}
+          speed={0.1}
+          opacity={0.2}
+          color="#FFF8DC"
+        />
+      </Float>
+      
+      {/* Stars at night */}
+      {timeOfDay === 'night' && (
+        <Stars 
+          radius={100} 
+          depth={50} 
+          count={5000} 
+          factor={4} 
+          saturation={0.5}
+          fade
+          speed={0.5}
+        />
+      )}
+      
+      {/* Decorative floating clouds during day */}
+      {(timeOfDay === 'day' || timeOfDay === 'morning') && (
+        <Float speed={0.5} rotationIntensity={0} floatIntensity={1}>
+          <group position={[-15, 25, -20]}>
+            <mesh>
+              <sphereGeometry args={[3, 8, 8]} />
+              <meshStandardMaterial color="#FFFFFF" transparent opacity={0.6} />
+            </mesh>
+            <mesh position={[2, 0.5, 0]}>
+              <sphereGeometry args={[2, 8, 8]} />
+              <meshStandardMaterial color="#FFFFFF" transparent opacity={0.5} />
+            </mesh>
+            <mesh position={[-2, 0.3, 0.5]}>
+              <sphereGeometry args={[2.5, 8, 8]} />
+              <meshStandardMaterial color="#FFFFFF" transparent opacity={0.55} />
+            </mesh>
+          </group>
+          <group position={[20, 22, -15]}>
+            <mesh>
+              <sphereGeometry args={[2.5, 8, 8]} />
+              <meshStandardMaterial color="#FFFFFF" transparent opacity={0.5} />
+            </mesh>
+            <mesh position={[1.5, 0.3, 0]}>
+              <sphereGeometry args={[1.8, 8, 8]} />
+              <meshStandardMaterial color="#FFFFFF" transparent opacity={0.45} />
+            </mesh>
+          </group>
+        </Float>
+      )}
+      
+      {/* Fog */}
+      <fog attach="fog" args={[fogColor, 30, 80]} />
+    </>
+  );
+}
+
+// ============================================
+// Enhanced Lighting Setup
+// ============================================
+
+function EnhancedLighting() {
+  const timeOfDay = useGameStore((s) => s.timeOfDay);
+  const region = useWorldStore((s) => s.currentRegion);
+  const sunRef = useRef<THREE.DirectionalLight>(null);
+  
+  const lightSettings = useMemo(() => ({
+    morning: { 
+      intensity: 1.2, 
+      color: '#FFF5E6', 
+      ambient: 0.5,
+      sunPosition: [15, 8, 10],
+      shadowIntensity: 0.3
+    },
+    day: { 
+      intensity: 1.5, 
+      color: '#FFFFFF', 
+      ambient: 0.6,
+      sunPosition: [10, 20, 10],
+      shadowIntensity: 0.2
+    },
+    evening: { 
+      intensity: 0.9, 
+      color: '#FFB366', 
+      ambient: 0.4,
+      sunPosition: [-15, 5, 10],
+      shadowIntensity: 0.4
+    },
+    night: { 
+      intensity: 0.3, 
+      color: '#6B8DD6', 
+      ambient: 0.2,
+      sunPosition: [-10, -5, 10],
+      shadowIntensity: 0.5
+    },
+  }), []);
+  
+  const settings = lightSettings[timeOfDay];
+  const skyColor = region?.palette.sky || '#87CEEB';
+  const groundColor = region?.palette.ground || '#4a7c59';
+  
+  useFrame((state) => {
+    if (sunRef.current) {
+      // Subtle sun movement
+      const time = state.clock.elapsedTime * 0.02;
+      sunRef.current.position.x = settings.sunPosition[0] + Math.sin(time) * 2;
+      sunRef.current.position.y = settings.sunPosition[1] + Math.cos(time) * 0.5;
+    }
+  });
+  
+  return (
+    <>
+      {/* Ambient base light */}
+      <ambientLight intensity={settings.ambient} color="#FFF8DC" />
+      
+      {/* Main sun/moon light */}
       <directionalLight
-        position={[10, 15, 10]}
+        ref={sunRef}
+        position={settings.sunPosition as [number, number, number]}
         intensity={settings.intensity}
         color={settings.color}
         castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-far={50}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
+        shadow-mapSize={[4096, 4096]}
+        shadow-camera-far={100}
+        shadow-camera-left={-40}
+        shadow-camera-right={40}
+        shadow-camera-top={40}
+        shadow-camera-bottom={-40}
+        shadow-bias={-0.0001}
+        shadow-normalBias={0.02}
       />
+      
+      {/* Sky hemisphere light */}
       <hemisphereLight
         color={skyColor}
-        groundColor={region?.palette.ground || '#4a7c59'}
+        groundColor={groundColor}
+        intensity={0.4}
+      />
+      
+      {/* Rim light for depth */}
+      <directionalLight
+        position={[-10, 5, -10]}
         intensity={0.3}
+        color="#87CEEB"
+      />
+      
+      {/* Fill light */}
+      <pointLight
+        position={[0, 10, 0]}
+        intensity={0.2}
+        color="#FFF8DC"
+        distance={50}
       />
     </>
   );
 }
 
 // ============================================
-// Camera Controller
+// Board Boundaries / Guardrails
 // ============================================
 
-function CameraController() {
+function BoardBoundaries({ width = 50, height = 50 }: { width?: number; height?: number }) {
+  const wallHeight = 3;
+  const wallThickness = 1;
+  
+  // Invisible collision walls + visual edge decoration
   return (
-    <OrthographicCamera
-      makeDefault
-      zoom={50}
-      position={[10, 10, 10]}
-      near={0.1}
-      far={1000}
-    />
+    <group>
+      {/* North Wall */}
+      <RigidBody type="fixed" colliders={false} position={[0, wallHeight / 2, -height / 2]}>
+        <CuboidCollider args={[width / 2 + wallThickness, wallHeight, wallThickness / 2]} />
+      </RigidBody>
+      
+      {/* South Wall */}
+      <RigidBody type="fixed" colliders={false} position={[0, wallHeight / 2, height / 2]}>
+        <CuboidCollider args={[width / 2 + wallThickness, wallHeight, wallThickness / 2]} />
+      </RigidBody>
+      
+      {/* East Wall */}
+      <RigidBody type="fixed" colliders={false} position={[width / 2, wallHeight / 2, 0]}>
+        <CuboidCollider args={[wallThickness / 2, wallHeight, height / 2 + wallThickness]} />
+      </RigidBody>
+      
+      {/* West Wall */}
+      <RigidBody type="fixed" colliders={false} position={[-width / 2, wallHeight / 2, 0]}>
+        <CuboidCollider args={[wallThickness / 2, wallHeight, height / 2 + wallThickness]} />
+      </RigidBody>
+      
+      {/* Visual border decoration - glowing edge posts */}
+      {Array.from({ length: 20 }).map((_, i) => {
+        const positions = [
+          [-width / 2 + (i * width / 19), 0, -height / 2],
+          [-width / 2 + (i * width / 19), 0, height / 2],
+          [-width / 2, 0, -height / 2 + (i * height / 19)],
+          [width / 2, 0, -height / 2 + (i * height / 19)],
+        ];
+        
+        return positions.map((pos, j) => (
+          <group key={`post-${i}-${j}`} position={pos as [number, number, number]}>
+            {/* Base stone */}
+            <mesh castShadow position={[0, 0.15, 0]}>
+              <cylinderGeometry args={[0.3, 0.4, 0.3, 6]} />
+              <meshStandardMaterial color="#5a5a6a" roughness={0.9} />
+            </mesh>
+            {/* Glowing crystal */}
+            <mesh position={[0, 0.5, 0]}>
+              <octahedronGeometry args={[0.15, 0]} />
+              <meshStandardMaterial 
+                color="#FFD700" 
+                emissive="#FFD700" 
+                emissiveIntensity={0.5}
+                roughness={0.2}
+                metalness={0.8}
+              />
+            </mesh>
+            {/* Point light for glow effect */}
+            {i % 5 === 0 && (
+              <pointLight 
+                position={[0, 0.5, 0]} 
+                color="#FFD700" 
+                intensity={0.3} 
+                distance={3}
+              />
+            )}
+          </group>
+        ));
+      })}
+      
+      {/* Decorative corner pillars */}
+      {[
+        [-width / 2, 0, -height / 2],
+        [width / 2, 0, -height / 2],
+        [-width / 2, 0, height / 2],
+        [width / 2, 0, height / 2],
+      ].map((pos, i) => (
+        <group key={`corner-${i}`} position={pos as [number, number, number]}>
+          <mesh castShadow position={[0, 1, 0]}>
+            <boxGeometry args={[0.8, 2, 0.8]} />
+            <meshStandardMaterial color="#4a4a5a" roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 2.2, 0]}>
+            <sphereGeometry args={[0.4, 8, 8]} />
+            <meshStandardMaterial 
+              color="#FF6B6B" 
+              emissive="#FF6B6B" 
+              emissiveIntensity={0.8}
+              roughness={0.3}
+            />
+          </mesh>
+          <pointLight 
+            position={[0, 2.2, 0]} 
+            color="#FF6B6B" 
+            intensity={1} 
+            distance={8}
+          />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// ============================================
+// Enhanced Ground with gradient & details
+// ============================================
+
+function EnhancedGround({ width = 50, height = 50 }: { width?: number; height?: number }) {
+  const region = useWorldStore((s) => s.currentRegion);
+  const groundColor = region?.palette.ground || '#4a7c59';
+  
+  return (
+    <group>
+      {/* Main ground with slight elevation for board feel */}
+      <RigidBody type="fixed" colliders={false}>
+        <CuboidCollider 
+          args={[width / 2 + 2, 0.5, height / 2 + 2]} 
+          position={[0, -0.5, 0]} 
+        />
+        
+        {/* Top surface */}
+        <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[width, height, 32, 32]} />
+          <meshStandardMaterial 
+            color={groundColor}
+            roughness={0.85}
+            metalness={0.05}
+          />
+        </mesh>
+      </RigidBody>
+      
+      {/* Elevated board edge - gives it a board game feel */}
+      <mesh receiveShadow position={[0, -0.15, 0]}>
+        <boxGeometry args={[width + 1, 0.3, height + 1]} />
+        <meshStandardMaterial 
+          color="#3d3d4d"
+          roughness={0.9}
+          metalness={0.1}
+        />
+      </mesh>
+      
+      {/* Decorative base layer */}
+      <mesh receiveShadow position={[0, -0.35, 0]}>
+        <boxGeometry args={[width + 2, 0.2, height + 2]} />
+        <meshStandardMaterial 
+          color="#2d2d3d"
+          roughness={0.95}
+        />
+      </mesh>
+      
+      {/* Shadow catcher underneath */}
+      <mesh receiveShadow position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[width + 10, height + 10]} />
+        <shadowMaterial opacity={0.3} />
+      </mesh>
+    </group>
   );
 }
 
@@ -78,28 +426,8 @@ function CameraController() {
 function FallbackGround() {
   return (
     <>
-      {/* Ground with physics collider */}
-      <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[50, 0.5, 50]} position={[0, -0.5, 0]} />
-        <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[100, 100]} />
-          <meshStandardMaterial color="#4a7c59" roughness={0.9} metalness={0.1} />
-        </mesh>
-      </RigidBody>
-      
-      {/* Grid overlay */}
-      <Grid
-        args={[100, 100]}
-        cellSize={1}
-        cellThickness={0.5}
-        cellColor="#5a8c69"
-        sectionSize={5}
-        sectionThickness={1}
-        sectionColor="#3d6b4a"
-        fadeDistance={50}
-        fadeStrength={1}
-        position={[0, 0.01, 0]}
-      />
+      <EnhancedGround width={50} height={50} />
+      <BoardBoundaries width={50} height={50} />
       
       {/* Some basic decorations for the fallback world */}
       {[
@@ -142,11 +470,10 @@ function WorldContent() {
     const npc = world?.npcRoster.find((n) => n.npcId === npcId);
     if (!npc) return;
     
-    // Start dialogue with a placeholder initial node
     startDialogue(npcId, {
       nodeId: 'start',
       speaker: npc.name,
-      text: '', // Will be filled by API call in DialogueModal
+      text: '',
       choices: [],
     });
   }, [world, startDialogue]);
@@ -167,6 +494,10 @@ function WorldContent() {
     }
   }, [world, addItem]);
   
+  // Get map dimensions
+  const mapWidth = region?.mapSpec?.grid?.width || 50;
+  const mapHeight = region?.mapSpec?.grid?.height || 50;
+  
   // Show fallback ground while loading
   if (!world || !region) {
     return <FallbackGround />;
@@ -176,7 +507,13 @@ function WorldContent() {
   
   return (
     <>
-      {/* Terrain */}
+      {/* Enhanced ground */}
+      <EnhancedGround width={mapWidth} height={mapHeight} />
+      
+      {/* Guardrails */}
+      <BoardBoundaries width={mapWidth} height={mapHeight} />
+      
+      {/* Terrain decorations */}
       <VoxelTerrain region={region} seed={world.seed} />
       
       {/* NPCs */}
@@ -204,11 +541,11 @@ function WorldContent() {
 function SceneContent() {
   return (
     <>
-      <CameraController />
-      <Lighting />
+      <EnhancedLighting />
+      <AtmosphericEffects />
       
       <Physics 
-        gravity={[0, -20, 0]} 
+        gravity={[0, -25, 0]} 
         debug={false}
         timeStep={1/60}
         interpolate={true}
@@ -217,6 +554,8 @@ function SceneContent() {
         <WorldContent />
         <PlayerController />
       </Physics>
+      
+      <PostProcessingEffects />
     </>
   );
 }
@@ -226,11 +565,23 @@ function SceneContent() {
 // ============================================
 
 function LoadingFallback() {
+  const meshRef = useRef<THREE.Mesh>(null);
+  
+  useFrame((state) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.x = state.clock.elapsedTime;
+      meshRef.current.rotation.y = state.clock.elapsedTime * 0.5;
+    }
+  });
+  
   return (
-    <mesh>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshBasicMaterial color="#666" wireframe />
-    </mesh>
+    <group>
+      <mesh ref={meshRef}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#FF6B6B" wireframe />
+      </mesh>
+      <ambientLight intensity={0.5} />
+    </group>
   );
 }
 
@@ -241,12 +592,12 @@ function LoadingFallback() {
 export function GameCanvas() {
   const setIsPlaying = useGameStore((s) => s.setIsPlaying);
   const region = useWorldStore((s) => s.currentRegion);
+  const timeOfDay = useGameStore((s) => s.timeOfDay);
   const containerRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     setIsPlaying(true);
     
-    // Ensure the container can receive focus and auto-focus it
     if (containerRef.current) {
       containerRef.current.focus();
     }
@@ -254,8 +605,16 @@ export function GameCanvas() {
     return () => setIsPlaying(false);
   }, [setIsPlaying]);
   
-  // Get sky color from region or use default
-  const skyColor = region?.palette.sky || '#1a1a2e';
+  // Dynamic sky color based on time of day
+  const skyColor = useMemo(() => {
+    switch (timeOfDay) {
+      case 'morning': return '#FFE4C4';
+      case 'day': return '#87CEEB';
+      case 'evening': return '#FF8C69';
+      case 'night': return '#0a0a1a';
+      default: return region?.palette.sky || '#87CEEB';
+    }
+  }, [timeOfDay, region?.palette.sky]);
   
   return (
     <div 
@@ -264,24 +623,27 @@ export function GameCanvas() {
       tabIndex={0}
       style={{ outline: 'none' }}
       onKeyDown={(e) => {
-        // Prevent arrow keys from scrolling
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
           e.preventDefault();
         }
       }}
     >
       <Canvas
-        shadows
+        shadows="soft"
         dpr={[1, 2]}
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.0,
+          toneMappingExposure: 1.2,
+          powerPreference: 'high-performance',
         }}
         onCreated={(state) => {
           state.gl.setClearColor(skyColor);
+          state.gl.shadowMap.enabled = true;
+          state.gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
+        <color attach="background" args={[skyColor]} />
         <Suspense fallback={<LoadingFallback />}>
           <SceneContent />
         </Suspense>
@@ -291,4 +653,3 @@ export function GameCanvas() {
 }
 
 export default GameCanvas;
-

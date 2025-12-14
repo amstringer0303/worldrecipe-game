@@ -3,9 +3,9 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RigidBody, CuboidCollider } from '@react-three/rapier';
-import { RoundedBox, Instances, Instance } from '@react-three/drei';
+import { RoundedBox, Float, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
-import type { RegionSpec, MapSpec, POI } from '@/types/game';
+import type { RegionSpec, POI } from '@/types/game';
 
 // ============================================
 // Seeded Random Generator
@@ -14,7 +14,6 @@ import type { RegionSpec, MapSpec, POI } from '@/types/game';
 function seededRandom(seed: string) {
   let hash = 0;
   
-  // Handle empty or invalid seed
   if (!seed || seed.length === 0) {
     seed = 'default-seed';
   }
@@ -25,107 +24,261 @@ function seededRandom(seed: string) {
     hash = hash & hash;
   }
   
-  // Ensure hash is not zero to avoid NaN from sin(0) edge cases
   if (hash === 0) hash = 1;
   
   return function() {
     hash = Math.sin(hash) * 10000;
     const result = hash - Math.floor(hash);
-    // Ensure we never return NaN
     return Number.isFinite(result) ? result : 0.5;
   };
 }
 
 // ============================================
-// Voxel Tree Component
+// Enhanced Voxel Tree Component
 // ============================================
 
 function VoxelTreeInstance({ 
   position, 
   scale = 1, 
-  foliageColor 
+  foliageColor,
+  variant = 0
 }: { 
   position: [number, number, number]; 
   scale?: number;
   foliageColor: string;
+  variant?: number;
 }) {
+  const treeRef = useRef<THREE.Group>(null);
+  
+  useFrame((state) => {
+    if (treeRef.current) {
+      // Subtle wind sway
+      const sway = Math.sin(state.clock.elapsedTime * 0.5 + position[0]) * 0.02;
+      treeRef.current.rotation.z = sway;
+    }
+  });
+  
+  // Different tree variants
+  const isOak = variant % 3 === 0;
+  const isPine = variant % 3 === 1;
+  
   return (
-    <group position={position} scale={scale}>
+    <group ref={treeRef} position={position} scale={scale}>
+      {/* Tree shadow */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
+        <circleGeometry args={[0.8, 8]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.2} />
+      </mesh>
+      
       {/* Trunk */}
-      <mesh castShadow position={[0, 0.5, 0]}>
-        <boxGeometry args={[0.4, 1, 0.4]} />
-        <meshStandardMaterial color="#8B4513" roughness={0.9} />
+      <mesh castShadow position={[0, 0.6, 0]}>
+        <boxGeometry args={[0.35, 1.2, 0.35]} />
+        <meshStandardMaterial 
+          color="#5D4037" 
+          roughness={0.9}
+        />
       </mesh>
-      {/* Foliage layers */}
-      <mesh castShadow position={[0, 1.5, 0]}>
-        <boxGeometry args={[1.2, 0.8, 1.2]} />
-        <meshStandardMaterial color={foliageColor} roughness={0.8} />
+      
+      {/* Trunk detail rings */}
+      <mesh position={[0, 0.3, 0.18]}>
+        <boxGeometry args={[0.2, 0.08, 0.02]} />
+        <meshStandardMaterial color="#3E2723" roughness={0.95} />
       </mesh>
-      <mesh castShadow position={[0, 2.1, 0]}>
-        <boxGeometry args={[0.9, 0.6, 0.9]} />
-        <meshStandardMaterial color={foliageColor} roughness={0.8} />
-      </mesh>
-      <mesh castShadow position={[0, 2.5, 0]}>
-        <boxGeometry args={[0.5, 0.4, 0.5]} />
-        <meshStandardMaterial color={foliageColor} roughness={0.8} />
-      </mesh>
+      
+      {isPine ? (
+        // Pine tree foliage
+        <>
+          <mesh castShadow position={[0, 1.4, 0]}>
+            <coneGeometry args={[0.9, 1.2, 6]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.8} />
+          </mesh>
+          <mesh castShadow position={[0, 2.2, 0]}>
+            <coneGeometry args={[0.65, 1, 6]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.8} />
+          </mesh>
+          <mesh castShadow position={[0, 2.85, 0]}>
+            <coneGeometry args={[0.4, 0.7, 6]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.8} />
+          </mesh>
+        </>
+      ) : isOak ? (
+        // Oak tree foliage (rounded)
+        <>
+          <mesh castShadow position={[0, 1.8, 0]}>
+            <sphereGeometry args={[1.1, 8, 6]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.85} />
+          </mesh>
+          <mesh castShadow position={[0.5, 1.6, 0.3]}>
+            <sphereGeometry args={[0.6, 6, 6]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.85} />
+          </mesh>
+          <mesh castShadow position={[-0.4, 1.5, -0.2]}>
+            <sphereGeometry args={[0.5, 6, 6]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.85} />
+          </mesh>
+        </>
+      ) : (
+        // Standard voxel tree foliage
+        <>
+          <mesh castShadow position={[0, 1.5, 0]}>
+            <boxGeometry args={[1.3, 0.9, 1.3]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.8} />
+          </mesh>
+          <mesh castShadow position={[0, 2.2, 0]}>
+            <boxGeometry args={[1, 0.7, 1]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.8} />
+          </mesh>
+          <mesh castShadow position={[0, 2.7, 0]}>
+            <boxGeometry args={[0.6, 0.5, 0.6]} />
+            <meshStandardMaterial color={foliageColor} roughness={0.8} />
+          </mesh>
+        </>
+      )}
     </group>
   );
 }
 
 // ============================================
-// Voxel Bush Component
+// Enhanced Voxel Bush Component
 // ============================================
 
 function VoxelBush({ position, color }: { position: [number, number, number]; color: string }) {
   return (
     <group position={position}>
-      <mesh castShadow position={[0, 0.2, 0]}>
-        <boxGeometry args={[0.6, 0.4, 0.6]} />
+      <mesh castShadow position={[0, 0.25, 0]}>
+        <sphereGeometry args={[0.35, 6, 6]} />
         <meshStandardMaterial color={color} roughness={0.85} />
       </mesh>
-      <mesh castShadow position={[0.2, 0.35, 0.1]}>
-        <boxGeometry args={[0.3, 0.25, 0.3]} />
+      <mesh castShadow position={[0.25, 0.2, 0.1]}>
+        <sphereGeometry args={[0.25, 6, 6]} />
         <meshStandardMaterial color={color} roughness={0.85} />
+      </mesh>
+      <mesh castShadow position={[-0.2, 0.18, -0.1]}>
+        <sphereGeometry args={[0.2, 6, 6]} />
+        <meshStandardMaterial color={color} roughness={0.85} />
+      </mesh>
+      {/* Small berry accents */}
+      <mesh position={[0.1, 0.4, 0.2]}>
+        <sphereGeometry args={[0.04, 4, 4]} />
+        <meshStandardMaterial color="#FF6B6B" emissive="#FF6B6B" emissiveIntensity={0.2} />
+      </mesh>
+      <mesh position={[-0.15, 0.35, 0.15]}>
+        <sphereGeometry args={[0.04, 4, 4]} />
+        <meshStandardMaterial color="#FF6B6B" emissive="#FF6B6B" emissiveIntensity={0.2} />
       </mesh>
     </group>
   );
 }
 
 // ============================================
-// Voxel Rock Component
+// Enhanced Voxel Rock Component
 // ============================================
 
-function VoxelRock({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function VoxelRock({ position, scale = 1, variant = 0 }: { position: [number, number, number]; scale?: number; variant?: number }) {
+  const colors = ['#708090', '#5F5F6F', '#696969', '#7B7B8B'];
+  const color = colors[variant % colors.length];
+  
   return (
-    <mesh castShadow position={position} scale={scale}>
-      <dodecahedronGeometry args={[0.4, 0]} />
-      <meshStandardMaterial color="#708090" roughness={0.95} />
-    </mesh>
+    <group position={position} scale={scale}>
+      <mesh castShadow position={[0, 0.2, 0]}>
+        <dodecahedronGeometry args={[0.4, 0]} />
+        <meshStandardMaterial color={color} roughness={0.95} />
+      </mesh>
+      {scale > 0.7 && (
+        <mesh castShadow position={[0.25, 0.1, 0.15]}>
+          <dodecahedronGeometry args={[0.2, 0]} />
+          <meshStandardMaterial color={color} roughness={0.95} />
+        </mesh>
+      )}
+      {/* Moss accent */}
+      <mesh position={[0, 0.35, 0.1]}>
+        <sphereGeometry args={[0.08, 4, 4]} />
+        <meshStandardMaterial color="#4A7C59" roughness={0.9} />
+      </mesh>
+    </group>
   );
 }
 
 // ============================================
-// Voxel Flower Component
+// Enhanced Voxel Flower Component
 // ============================================
 
 function VoxelFlower({ position, color }: { position: [number, number, number]; color: string }) {
+  const flowerRef = useRef<THREE.Group>(null);
+  
+  useFrame((state) => {
+    if (flowerRef.current) {
+      // Gentle sway
+      flowerRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 2 + position[0] * 10) * 0.1;
+    }
+  });
+  
   return (
-    <group position={position}>
-      <mesh castShadow position={[0, 0.15, 0]}>
-        <boxGeometry args={[0.05, 0.3, 0.05]} />
+    <group ref={flowerRef} position={position}>
+      {/* Stem */}
+      <mesh castShadow position={[0, 0.18, 0]}>
+        <boxGeometry args={[0.04, 0.36, 0.04]} />
         <meshStandardMaterial color="#228B22" roughness={0.9} />
       </mesh>
-      <mesh castShadow position={[0, 0.35, 0]}>
-        <boxGeometry args={[0.2, 0.1, 0.2]} />
-        <meshStandardMaterial color={color} roughness={0.7} />
+      {/* Leaf */}
+      <mesh position={[0.06, 0.12, 0]} rotation={[0, 0, -0.5]}>
+        <boxGeometry args={[0.1, 0.06, 0.02]} />
+        <meshStandardMaterial color="#32CD32" roughness={0.8} />
+      </mesh>
+      {/* Flower petals */}
+      <mesh position={[0, 0.4, 0]}>
+        <boxGeometry args={[0.18, 0.08, 0.18]} />
+        <meshStandardMaterial 
+          color={color} 
+          roughness={0.6}
+          emissive={color}
+          emissiveIntensity={0.1}
+        />
+      </mesh>
+      {/* Center */}
+      <mesh position={[0, 0.42, 0]}>
+        <sphereGeometry args={[0.04, 6, 6]} />
+        <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.3} />
       </mesh>
     </group>
   );
 }
 
 // ============================================
-// Water Body Component
+// Mushroom Component
+// ============================================
+
+function VoxelMushroom({ position, variant = 0 }: { position: [number, number, number]; variant?: number }) {
+  const colors = ['#FF6B6B', '#DEB887', '#9370DB', '#FFD700'];
+  const color = colors[variant % colors.length];
+  
+  return (
+    <group position={position}>
+      {/* Stem */}
+      <mesh castShadow position={[0, 0.12, 0]}>
+        <cylinderGeometry args={[0.06, 0.08, 0.24, 6]} />
+        <meshStandardMaterial color="#FFF8DC" roughness={0.7} />
+      </mesh>
+      {/* Cap */}
+      <mesh castShadow position={[0, 0.28, 0]}>
+        <sphereGeometry args={[0.15, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color={color} roughness={0.6} />
+      </mesh>
+      {/* Spots */}
+      <mesh position={[0.05, 0.32, 0.08]}>
+        <sphereGeometry args={[0.025, 4, 4]} />
+        <meshStandardMaterial color="#FFFFFF" />
+      </mesh>
+      <mesh position={[-0.07, 0.3, 0.05]}>
+        <sphereGeometry args={[0.02, 4, 4]} />
+        <meshStandardMaterial color="#FFFFFF" />
+      </mesh>
+    </group>
+  );
+}
+
+// ============================================
+// Water Body Component - Enhanced
 // ============================================
 
 function WaterBody({ position, size }: { position: [number, number]; size: [number, number] }) {
@@ -133,34 +286,71 @@ function WaterBody({ position, size }: { position: [number, number]; size: [numb
   
   useFrame((state) => {
     if (waterRef.current) {
-      waterRef.current.position.y = 0.05 + Math.sin(state.clock.elapsedTime * 0.5) * 0.02;
+      waterRef.current.position.y = 0.03 + Math.sin(state.clock.elapsedTime * 0.8) * 0.015;
+      // Subtle scale pulse
+      const scale = 1 + Math.sin(state.clock.elapsedTime * 0.5) * 0.01;
+      waterRef.current.scale.set(scale, scale, 1);
     }
   });
   
   return (
-    <mesh 
-      ref={waterRef}
-      receiveShadow 
-      position={[position[0], 0.05, position[1]]} 
-      rotation={[-Math.PI / 2, 0, 0]}
-    >
-      <planeGeometry args={[size[0], size[1]]} />
-      <meshStandardMaterial 
-        color="#4A90D9"
-        transparent
-        opacity={0.8}
-        roughness={0.2}
-        metalness={0.3}
+    <group position={[position[0], 0, position[1]]}>
+      {/* Water surface */}
+      <mesh 
+        ref={waterRef}
+        receiveShadow 
+        position={[0, 0.03, 0]} 
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <planeGeometry args={[size[0], size[1], 8, 8]} />
+        <meshStandardMaterial 
+          color="#3B8ED0"
+          transparent
+          opacity={0.85}
+          roughness={0.1}
+          metalness={0.4}
+        />
+      </mesh>
+      
+      {/* Water edge */}
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[size[0] + 0.5, size[1] + 0.5]} />
+        <meshStandardMaterial color="#2E7D32" roughness={0.9} />
+      </mesh>
+      
+      {/* Sparkles on water */}
+      <Sparkles 
+        count={20}
+        scale={[size[0], 0.5, size[1]]}
+        size={1.5}
+        speed={0.5}
+        opacity={0.6}
+        color="#FFFFFF"
+        position={[0, 0.1, 0]}
       />
-    </mesh>
+      
+      {/* Lily pads */}
+      {size[0] > 3 && (
+        <>
+          <mesh position={[size[0] * 0.2, 0.04, size[1] * 0.15]} rotation={[-Math.PI / 2, 0, Math.random()]}>
+            <circleGeometry args={[0.25, 6]} />
+            <meshStandardMaterial color="#228B22" roughness={0.7} />
+          </mesh>
+          <mesh position={[-size[0] * 0.25, 0.04, -size[1] * 0.2]} rotation={[-Math.PI / 2, 0, Math.random()]}>
+            <circleGeometry args={[0.2, 6]} />
+            <meshStandardMaterial color="#32CD32" roughness={0.7} />
+          </mesh>
+        </>
+      )}
+    </group>
   );
 }
 
 // ============================================
-// Path Component
+// Path Component - Enhanced
 // ============================================
 
-function PathSegment({ from, to, groundColor }: { from: [number, number]; to: [number, number]; groundColor: string }) {
+function PathSegment({ from, to }: { from: [number, number]; to: [number, number] }) {
   const midPoint: [number, number, number] = [
     (from[0] + to[0]) / 2,
     0.02,
@@ -174,25 +364,61 @@ function PathSegment({ from, to, groundColor }: { from: [number, number]; to: [n
   const angle = Math.atan2(to[1] - from[1], to[0] - from[0]);
   
   return (
-    <mesh 
-      receiveShadow 
-      position={midPoint} 
-      rotation={[-Math.PI / 2, 0, -angle]}
-    >
-      <planeGeometry args={[length, 1.5]} />
-      <meshStandardMaterial 
-        color={groundColor}
-        roughness={0.95}
-      />
-    </mesh>
+    <group>
+      {/* Main path */}
+      <mesh 
+        receiveShadow 
+        position={midPoint} 
+        rotation={[-Math.PI / 2, 0, -angle]}
+      >
+        <planeGeometry args={[length, 1.2]} />
+        <meshStandardMaterial 
+          color="#C4A484"
+          roughness={0.95}
+        />
+      </mesh>
+      
+      {/* Path border stones */}
+      {Array.from({ length: Math.floor(length / 1.5) }).map((_, i) => {
+        const t = (i + 0.5) / Math.floor(length / 1.5);
+        const x = from[0] + (to[0] - from[0]) * t;
+        const z = from[1] + (to[1] - from[1]) * t;
+        const offset = 0.7;
+        
+        return (
+          <group key={`stone-${i}`}>
+            <mesh position={[x + Math.cos(angle + Math.PI/2) * offset, 0.05, z + Math.sin(angle + Math.PI/2) * offset]}>
+              <boxGeometry args={[0.15, 0.1, 0.15]} />
+              <meshStandardMaterial color="#8B7355" roughness={0.95} />
+            </mesh>
+            <mesh position={[x - Math.cos(angle + Math.PI/2) * offset, 0.05, z - Math.sin(angle + Math.PI/2) * offset]}>
+              <boxGeometry args={[0.15, 0.1, 0.15]} />
+              <meshStandardMaterial color="#8B7355" roughness={0.95} />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
   );
 }
 
 // ============================================
-// POI Marker Component
+// Enhanced POI Marker Component
 // ============================================
 
 function POIMarker({ poi, palette }: { poi: POI; palette: any }) {
+  const markerRef = useRef<THREE.Group>(null);
+  
+  useFrame((state) => {
+    if (markerRef.current) {
+      // Floating indicator
+      const child = markerRef.current.children[markerRef.current.children.length - 1];
+      if (child) {
+        child.position.y = 4 + Math.sin(state.clock.elapsedTime * 2) * 0.2;
+      }
+    }
+  });
+  
   const markerColors: Record<string, string> = {
     market: '#FFD700',
     dock: '#4A90D9',
@@ -205,13 +431,12 @@ function POIMarker({ poi, palette }: { poi: POI; palette: any }) {
   
   const markerColor = markerColors[poi.type] || palette.accent;
   
-  // Validate position before rendering
   if (!Number.isFinite(poi.position[0]) || !Number.isFinite(poi.position[1])) {
     return null;
   }
   
   return (
-    <group position={[poi.position[0], 0, poi.position[1]]}>
+    <group ref={markerRef} position={[poi.position[0], 0, poi.position[1]]}>
       {/* Collision area for POI */}
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider 
@@ -220,101 +445,235 @@ function POIMarker({ poi, palette }: { poi: POI; palette: any }) {
           position={[0, 1, 0]}
         />
       </RigidBody>
-      <group>
-        {/* Base platform */}
-        <mesh receiveShadow position={[0, 0.1, 0]}>
-          <cylinderGeometry args={[2, 2.5, 0.2, 8]} />
-          <meshStandardMaterial color={markerColor} roughness={0.7} />
+      
+      {/* Enhanced base platform */}
+      <mesh receiveShadow position={[0, 0.08, 0]}>
+        <cylinderGeometry args={[2.5, 3, 0.16, 12]} />
+        <meshStandardMaterial 
+          color={markerColor} 
+          roughness={0.6}
+          metalness={0.2}
+        />
+      </mesh>
+      <mesh receiveShadow position={[0, 0.02, 0]}>
+        <cylinderGeometry args={[3.2, 3.5, 0.04, 12]} />
+        <meshStandardMaterial color="#4A4A5A" roughness={0.8} />
+      </mesh>
+      
+      {/* Building based on type */}
+      {poi.type === 'market' && (
+        <group>
+          <RoundedBox args={[3.5, 2.2, 2.5]} radius={0.15} position={[0, 1.2, 0]} castShadow>
+            <meshStandardMaterial color="#DEB887" roughness={0.75} />
+          </RoundedBox>
+          {/* Awning */}
+          <mesh position={[0, 2.5, 1.5]} rotation={[0.3, 0, 0]} castShadow>
+            <boxGeometry args={[3.8, 0.1, 1.2]} />
+            <meshStandardMaterial color="#DC143C" roughness={0.7} />
+          </mesh>
+          {/* Sign */}
+          <mesh position={[0, 2.8, 1.6]} castShadow>
+            <boxGeometry args={[1.5, 0.4, 0.1]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+          {/* Display items */}
+          <mesh position={[-1, 0.4, 1.3]} castShadow>
+            <boxGeometry args={[0.4, 0.3, 0.3]} />
+            <meshStandardMaterial color="#FF6B6B" />
+          </mesh>
+          <mesh position={[0.5, 0.4, 1.3]} castShadow>
+            <sphereGeometry args={[0.2, 8, 8]} />
+            <meshStandardMaterial color="#FFD700" />
+          </mesh>
+        </group>
+      )}
+      
+      {poi.type === 'kitchen_hut' && (
+        <group>
+          <RoundedBox args={[3, 2, 3]} radius={0.12} position={[0, 1.1, 0]} castShadow>
+            <meshStandardMaterial color="#FFEFD5" roughness={0.65} />
+          </RoundedBox>
+          {/* Roof */}
+          <mesh position={[0, 2.5, 0]} castShadow>
+            <coneGeometry args={[2.2, 1.5, 8]} />
+            <meshStandardMaterial color="#CD853F" roughness={0.8} />
+          </mesh>
+          {/* Chimney with smoke effect */}
+          <mesh position={[1, 3, 0]} castShadow>
+            <boxGeometry args={[0.4, 1, 0.4]} />
+            <meshStandardMaterial color="#696969" roughness={0.9} />
+          </mesh>
+          <Sparkles 
+            count={8}
+            scale={[0.5, 1, 0.5]}
+            size={2}
+            speed={0.3}
+            opacity={0.3}
+            color="#888888"
+            position={[1, 3.8, 0]}
+          />
+          {/* Window */}
+          <mesh position={[0, 1.2, 1.51]} castShadow>
+            <boxGeometry args={[0.6, 0.5, 0.05]} />
+            <meshStandardMaterial color="#87CEEB" metalness={0.8} roughness={0.2} />
+          </mesh>
+          {/* Door */}
+          <mesh position={[0, 0.7, 1.51]} castShadow>
+            <boxGeometry args={[0.8, 1.2, 0.05]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+        </group>
+      )}
+      
+      {poi.type === 'dock' && (
+        <group>
+          <mesh position={[0, 0.35, 0]} receiveShadow castShadow>
+            <boxGeometry args={[5, 0.5, 2.5]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+          {/* Support posts */}
+          <mesh position={[-2, 0.5, 0]} castShadow>
+            <boxGeometry args={[0.25, 1.2, 0.25]} />
+            <meshStandardMaterial color="#5D4037" roughness={0.9} />
+          </mesh>
+          <mesh position={[2, 0.5, 0]} castShadow>
+            <boxGeometry args={[0.25, 1.2, 0.25]} />
+            <meshStandardMaterial color="#5D4037" roughness={0.9} />
+          </mesh>
+          {/* Rope coil */}
+          <mesh position={[-1.8, 0.7, 0.8]}>
+            <torusGeometry args={[0.15, 0.04, 6, 12]} />
+            <meshStandardMaterial color="#C4A484" roughness={0.95} />
+          </mesh>
+          {/* Lantern */}
+          <mesh position={[2, 1.3, 0]} castShadow>
+            <boxGeometry args={[0.2, 0.3, 0.2]} />
+            <meshStandardMaterial 
+              color="#FFD700" 
+              emissive="#FFD700" 
+              emissiveIntensity={0.5} 
+            />
+          </mesh>
+          <pointLight position={[2, 1.3, 0]} color="#FFD700" intensity={0.5} distance={4} />
+        </group>
+      )}
+      
+      {poi.type === 'shrine' && (
+        <group>
+          <mesh position={[0, 1.5, 0]} castShadow>
+            <boxGeometry args={[2, 3, 2]} />
+            <meshStandardMaterial color="#DC143C" roughness={0.5} />
+          </mesh>
+          {/* Roof layers */}
+          <mesh position={[0, 3.2, 0]} castShadow>
+            <boxGeometry args={[2.5, 0.4, 2.5]} />
+            <meshStandardMaterial color="#2F4F4F" roughness={0.7} metalness={0.3} />
+          </mesh>
+          <mesh position={[0, 3.5, 0]} castShadow>
+            <boxGeometry args={[2, 0.3, 2]} />
+            <meshStandardMaterial color="#2F4F4F" roughness={0.7} metalness={0.3} />
+          </mesh>
+          {/* Shrine decoration */}
+          <mesh position={[0, 0.4, 1.1]} castShadow>
+            <boxGeometry args={[0.8, 0.6, 0.2]} />
+            <meshStandardMaterial color="#FFD700" metalness={0.6} roughness={0.3} />
+          </mesh>
+          {/* Glowing orb */}
+          <mesh position={[0, 4, 0]}>
+            <sphereGeometry args={[0.25, 12, 12]} />
+            <meshStandardMaterial 
+              color="#FF69B4" 
+              emissive="#FF69B4" 
+              emissiveIntensity={1}
+            />
+          </mesh>
+          <pointLight position={[0, 4, 0]} color="#FF69B4" intensity={1} distance={6} />
+        </group>
+      )}
+      
+      {poi.type === 'farm' && (
+        <group>
+          {/* Fenced area with gates */}
+          {[[-2, 0, -1.8], [2, 0, -1.8], [-2, 0, 1.8], [2, 0, 1.8]].map(([x, y, z], i) => (
+            <mesh key={`post-${i}`} position={[x, 0.5, z]} castShadow>
+              <boxGeometry args={[0.15, 1, 0.15]} />
+              <meshStandardMaterial color="#8B4513" roughness={0.9} />
+            </mesh>
+          ))}
+          {/* Fence rails */}
+          <mesh position={[0, 0.3, -1.8]} castShadow>
+            <boxGeometry args={[4, 0.1, 0.08]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.6, -1.8]} castShadow>
+            <boxGeometry args={[4, 0.1, 0.08]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.3, 1.8]} castShadow>
+            <boxGeometry args={[4, 0.1, 0.08]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.6, 1.8]} castShadow>
+            <boxGeometry args={[4, 0.1, 0.08]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+          {/* Crop rows */}
+          {[-0.8, 0, 0.8].map((z, i) => (
+            <group key={`row-${i}`}>
+              {[-1.2, -0.4, 0.4, 1.2].map((x, j) => (
+                <mesh key={`crop-${i}-${j}`} position={[x, 0.2, z]} castShadow>
+                  <boxGeometry args={[0.15, 0.4, 0.15]} />
+                  <meshStandardMaterial color="#228B22" roughness={0.8} />
+                </mesh>
+              ))}
+            </group>
+          ))}
+        </group>
+      )}
+      
+      {/* Floating label indicator */}
+      <Float speed={2} rotationIntensity={0} floatIntensity={0.5}>
+        <mesh position={[0, 4.5, 0]}>
+          <sphereGeometry args={[0.35, 12, 12]} />
+          <meshStandardMaterial 
+            color={markerColor} 
+            emissive={markerColor} 
+            emissiveIntensity={0.8}
+            roughness={0.3}
+          />
         </mesh>
-        
-        {/* Building based on type */}
-        {poi.type === 'market' && (
-          <group>
-            <RoundedBox args={[3, 2, 2]} radius={0.1} position={[0, 1.1, 0]} castShadow>
-              <meshStandardMaterial color="#DEB887" roughness={0.8} />
-            </RoundedBox>
-            <mesh position={[0, 2.5, 0]} castShadow>
-              <coneGeometry args={[2, 1.5, 4]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-          </group>
-        )}
-        
-        {poi.type === 'kitchen_hut' && (
-          <group>
-            <RoundedBox args={[2.5, 1.8, 2.5]} radius={0.1} position={[0, 1, 0]} castShadow>
-              <meshStandardMaterial color="#FFEFD5" roughness={0.7} />
-            </RoundedBox>
-            <mesh position={[0, 2.3, 0]} castShadow>
-              <coneGeometry args={[1.8, 1.2, 8]} />
-              <meshStandardMaterial color="#CD853F" roughness={0.8} />
-            </mesh>
-            {/* Chimney */}
-            <mesh position={[0.8, 2.8, 0]} castShadow>
-              <boxGeometry args={[0.3, 0.8, 0.3]} />
-              <meshStandardMaterial color="#696969" roughness={0.9} />
-            </mesh>
-          </group>
-        )}
-        
-        {poi.type === 'dock' && (
-          <group>
-            <mesh position={[0, 0.3, 0]} receiveShadow>
-              <boxGeometry args={[4, 0.4, 2]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-            <mesh position={[-1.5, 0.8, 0]} castShadow>
-              <boxGeometry args={[0.2, 1, 0.2]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-            <mesh position={[1.5, 0.8, 0]} castShadow>
-              <boxGeometry args={[0.2, 1, 0.2]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-          </group>
-        )}
-        
-        {poi.type === 'shrine' && (
-          <group>
-            <mesh position={[0, 1.2, 0]} castShadow>
-              <boxGeometry args={[1.5, 2, 1.5]} />
-              <meshStandardMaterial color="#DC143C" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, 2.5, 0]} castShadow>
-              <boxGeometry args={[2, 0.3, 2]} />
-              <meshStandardMaterial color="#2F4F4F" roughness={0.8} />
-            </mesh>
-          </group>
-        )}
-        
-        {poi.type === 'farm' && (
-          <group>
-            {/* Fenced area */}
-            <mesh position={[0, 0.2, -1.5]} castShadow>
-              <boxGeometry args={[4, 0.6, 0.1]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-            <mesh position={[0, 0.2, 1.5]} castShadow>
-              <boxGeometry args={[4, 0.6, 0.1]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-            <mesh position={[-2, 0.2, 0]} castShadow>
-              <boxGeometry args={[0.1, 0.6, 3]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-            <mesh position={[2, 0.2, 0]} castShadow>
-              <boxGeometry args={[0.1, 0.6, 3]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.9} />
-            </mesh>
-          </group>
-        )}
-        
-        {/* Label indicator - floating above */}
-        <mesh position={[0, 4, 0]} castShadow>
-          <sphereGeometry args={[0.3, 8, 8]} />
-          <meshStandardMaterial color={markerColor} emissive={markerColor} emissiveIntensity={0.5} />
-        </mesh>
-      </group>
+        <pointLight 
+          position={[0, 4.5, 0]} 
+          color={markerColor} 
+          intensity={0.8} 
+          distance={5}
+        />
+      </Float>
+    </group>
+  );
+}
+
+// ============================================
+// Grass Patch Component
+// ============================================
+
+function GrassPatch({ position, color }: { position: [number, number, number]; color: string }) {
+  return (
+    <group position={position}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const angle = (i / 5) * Math.PI * 2;
+        const dist = 0.1 + Math.random() * 0.1;
+        return (
+          <mesh 
+            key={i} 
+            position={[Math.cos(angle) * dist, 0.1, Math.sin(angle) * dist]}
+            rotation={[0, angle, 0.2]}
+          >
+            <boxGeometry args={[0.03, 0.2 + Math.random() * 0.1, 0.02]} />
+            <meshStandardMaterial color={color} roughness={0.9} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
@@ -328,7 +687,6 @@ interface VoxelTerrainProps {
   seed: string;
 }
 
-// Helper to validate position tuples
 function isValidPosition(pos: unknown): boolean {
   if (!pos) return false;
   if (!Array.isArray(pos)) return false;
@@ -339,7 +697,6 @@ function isValidPosition(pos: unknown): boolean {
 export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
   const { mapSpec, palette } = region;
   
-  // Validate mapSpec has required properties
   if (!mapSpec?.grid?.width || !mapSpec?.grid?.height) {
     console.warn('Invalid mapSpec:', mapSpec);
     return null;
@@ -348,75 +705,74 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
   // Generate decoration positions using seeded random
   const decorations = useMemo(() => {
     const random = seededRandom(seed + region.regionId);
-    const trees: [number, number, number][] = [];
+    const trees: { pos: [number, number, number]; scale: number; variant: number }[] = [];
     const bushes: [number, number, number][] = [];
-    const rocks: [number, number, number][] = [];
+    const rocks: { pos: [number, number, number]; scale: number; variant: number }[] = [];
     const flowers: [number, number, number][] = [];
+    const mushrooms: { pos: [number, number, number]; variant: number }[] = [];
+    const grassPatches: [number, number, number][] = [];
     
     const { width, height } = mapSpec.grid;
     const density = mapSpec.decorRules.density;
     
-    // Generate decorations avoiding POIs and water
-    const numDecorations = Math.floor(width * height * density * 0.1);
+    const numDecorations = Math.floor(width * height * density * 0.15);
     
     for (let i = 0; i < numDecorations; i++) {
-      const x = (random() - 0.5) * width;
-      const z = (random() - 0.5) * height;
+      const x = (random() - 0.5) * (width - 4);
+      const z = (random() - 0.5) * (height - 4);
       
-      // Check if position is valid (not in water or near POI)
       const inWater = mapSpec.terrain.waterBodies.some(wb => 
-        Math.abs(x - wb.position[0]) < wb.size[0] / 2 &&
-        Math.abs(z - wb.position[1]) < wb.size[1] / 2
+        Math.abs(x - wb.position[0]) < wb.size[0] / 2 + 1 &&
+        Math.abs(z - wb.position[1]) < wb.size[1] / 2 + 1
       );
       
       const nearPOI = mapSpec.pois.some(poi =>
-        Math.sqrt(Math.pow(x - poi.position[0], 2) + Math.pow(z - poi.position[1], 2)) < 5
+        Math.sqrt(Math.pow(x - poi.position[0], 2) + Math.pow(z - poi.position[1], 2)) < 6
       );
       
       if (inWater || nearPOI) continue;
       
       const type = random();
-      if (type < 0.3) {
-        trees.push([x, 0, z]);
-      } else if (type < 0.5) {
+      if (type < 0.2) {
+        trees.push({ 
+          pos: [x, 0, z], 
+          scale: 0.7 + random() * 0.5,
+          variant: Math.floor(random() * 3)
+        });
+      } else if (type < 0.35) {
         bushes.push([x, 0, z]);
+      } else if (type < 0.45) {
+        rocks.push({ 
+          pos: [x, 0.15, z],
+          scale: 0.4 + random() * 0.5,
+          variant: Math.floor(random() * 4)
+        });
       } else if (type < 0.65) {
-        rocks.push([x, 0.2, z]);
-      } else {
         flowers.push([x, 0, z]);
+      } else if (type < 0.75) {
+        mushrooms.push({
+          pos: [x, 0, z],
+          variant: Math.floor(random() * 4)
+        });
+      } else {
+        grassPatches.push([x, 0, z]);
       }
     }
     
-    return { trees, bushes, rocks, flowers };
+    return { trees, bushes, rocks, flowers, mushrooms, grassPatches };
   }, [seed, region.regionId, mapSpec]);
   
-  // Flower colors based on palette
   const flowerColors = useMemo(() => [
     palette.accent,
     '#FF69B4',
     '#FFD700',
     '#FF6347',
     '#9370DB',
+    '#00CED1',
   ], [palette.accent]);
   
   return (
     <group>
-      {/* Ground plane */}
-      <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider 
-          args={[mapSpec.grid.width / 2, 0.5, mapSpec.grid.height / 2]} 
-          position={[0, -0.5, 0]} 
-        />
-        <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[mapSpec.grid.width, mapSpec.grid.height]} />
-          <meshStandardMaterial 
-            color={palette.ground}
-            roughness={0.9}
-            metalness={0.1}
-          />
-        </mesh>
-      </RigidBody>
-      
       {/* Water bodies */}
       {mapSpec.terrain.waterBodies
         .filter(wb => isValidPosition(wb.position) && isValidPosition(wb.size))
@@ -431,19 +787,19 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
           <PathSegment 
             key={`path-${i}`} 
             from={path.from} 
-            to={path.to} 
-            groundColor="#C4A484"
+            to={path.to}
           />
         ))}
       
       {/* Trees with colliders */}
-      {decorations.trees.map((pos, i) => (
-        <RigidBody key={`tree-${i}`} type="fixed" position={pos} colliders={false}>
+      {decorations.trees.map((tree, i) => (
+        <RigidBody key={`tree-${i}`} type="fixed" position={tree.pos} colliders={false}>
           <CuboidCollider args={[0.3, 1.5, 0.3]} position={[0, 1.5, 0]} />
           <VoxelTreeInstance 
             position={[0, 0, 0]} 
-            scale={0.8 + Math.sin(i * 7.3) * 0.3}
+            scale={tree.scale}
             foliageColor={palette.foliage}
+            variant={tree.variant}
           />
         </RigidBody>
       ))}
@@ -454,9 +810,9 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       ))}
       
       {/* Rocks */}
-      {decorations.rocks.map((pos, i) => (
-        <RigidBody key={`rock-${i}`} type="fixed" position={pos} colliders="hull">
-          <VoxelRock position={[0, 0, 0]} scale={0.5 + Math.sin(i * 4.7) * 0.3} />
+      {decorations.rocks.map((rock, i) => (
+        <RigidBody key={`rock-${i}`} type="fixed" position={rock.pos} colliders="hull">
+          <VoxelRock position={[0, 0, 0]} scale={rock.scale} variant={rock.variant} />
         </RigidBody>
       ))}
       
@@ -467,6 +823,20 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
           position={pos} 
           color={flowerColors[i % flowerColors.length]}
         />
+      ))}
+      
+      {/* Mushrooms */}
+      {decorations.mushrooms.map((mushroom, i) => (
+        <VoxelMushroom 
+          key={`mushroom-${i}`} 
+          position={mushroom.pos}
+          variant={mushroom.variant}
+        />
+      ))}
+      
+      {/* Grass patches */}
+      {decorations.grassPatches.map((pos, i) => (
+        <GrassPatch key={`grass-${i}`} position={pos} color={palette.foliage} />
       ))}
       
       {/* POI Markers */}
@@ -480,4 +850,3 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
 }
 
 export default VoxelTerrain;
-

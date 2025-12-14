@@ -55,48 +55,48 @@
 
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.12 0.02 250);
-  --foreground: oklch(0.95 0.01 90);
-  --card: oklch(0.18 0.02 250);
-  --card-foreground: oklch(0.95 0.01 90);
-  --popover: oklch(0.15 0.02 250);
-  --popover-foreground: oklch(0.95 0.01 90);
-  --primary: oklch(0.75 0.15 60);
-  --primary-foreground: oklch(0.15 0.02 60);
-  --secondary: oklch(0.25 0.03 250);
-  --secondary-foreground: oklch(0.9 0.01 90);
-  --muted: oklch(0.22 0.02 250);
-  --muted-foreground: oklch(0.65 0.02 250);
-  --accent: oklch(0.65 0.18 145);
-  --accent-foreground: oklch(0.15 0.02 145);
-  --destructive: oklch(0.60 0.22 25);
-  --border: oklch(0.30 0.02 250);
-  --input: oklch(0.25 0.02 250);
-  --ring: oklch(0.75 0.15 60);
+  --background: oklch(0.10 0.02 260);
+  --foreground: oklch(0.97 0.01 90);
+  --card: oklch(0.15 0.02 260);
+  --card-foreground: oklch(0.97 0.01 90);
+  --popover: oklch(0.13 0.02 260);
+  --popover-foreground: oklch(0.97 0.01 90);
+  --primary: oklch(0.78 0.16 55);
+  --primary-foreground: oklch(0.12 0.02 55);
+  --secondary: oklch(0.22 0.03 260);
+  --secondary-foreground: oklch(0.92 0.01 90);
+  --muted: oklch(0.20 0.02 260);
+  --muted-foreground: oklch(0.60 0.02 260);
+  --accent: oklch(0.68 0.18 150);
+  --accent-foreground: oklch(0.12 0.02 150);
+  --destructive: oklch(0.58 0.22 25);
+  --border: oklch(0.28 0.02 260);
+  --input: oklch(0.22 0.02 260);
+  --ring: oklch(0.78 0.16 55);
   
-  /* Cozy palette */
-  --cozy-warm: oklch(0.80 0.12 40);
-  --cozy-golden: oklch(0.85 0.15 85);
-  --cozy-green: oklch(0.65 0.15 145);
-  --cozy-sky: oklch(0.70 0.12 230);
-  --cozy-earth: oklch(0.50 0.08 60);
+  /* Enhanced Cozy palette */
+  --cozy-warm: oklch(0.82 0.14 38);
+  --cozy-golden: oklch(0.88 0.16 80);
+  --cozy-green: oklch(0.68 0.16 148);
+  --cozy-sky: oklch(0.72 0.14 235);
+  --cozy-earth: oklch(0.52 0.10 55);
   
   /* Charts */
-  --chart-1: oklch(0.75 0.15 60);
-  --chart-2: oklch(0.65 0.18 145);
-  --chart-3: oklch(0.70 0.12 230);
-  --chart-4: oklch(0.80 0.12 40);
-  --chart-5: oklch(0.60 0.22 25);
+  --chart-1: oklch(0.78 0.16 55);
+  --chart-2: oklch(0.68 0.18 150);
+  --chart-3: oklch(0.72 0.14 235);
+  --chart-4: oklch(0.82 0.14 38);
+  --chart-5: oklch(0.58 0.22 25);
   
   /* Sidebar */
-  --sidebar: oklch(0.15 0.02 250);
-  --sidebar-foreground: oklch(0.9 0.01 90);
-  --sidebar-primary: oklch(0.75 0.15 60);
-  --sidebar-primary-foreground: oklch(0.15 0.02 60);
-  --sidebar-accent: oklch(0.22 0.03 250);
-  --sidebar-accent-foreground: oklch(0.9 0.01 90);
-  --sidebar-border: oklch(0.28 0.02 250);
-  --sidebar-ring: oklch(0.75 0.15 60);
+  --sidebar: oklch(0.12 0.02 260);
+  --sidebar-foreground: oklch(0.92 0.01 90);
+  --sidebar-primary: oklch(0.78 0.16 55);
+  --sidebar-primary-foreground: oklch(0.12 0.02 55);
+  --sidebar-accent: oklch(0.20 0.03 260);
+  --sidebar-accent-foreground: oklch(0.92 0.01 90);
+  --sidebar-border: oklch(0.25 0.02 260);
+  --sidebar-ring: oklch(0.78 0.16 55);
 }
 
 @layer base {
@@ -104,39 +104,134 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Game-specific styles */
+/* ============================================
+   Game Canvas Styles
+   ============================================ */
+
 .game-canvas {
   width: 100vw;
   height: 100vh;
   position: fixed;
   top: 0;
   left: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
 }
+
+.game-canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ============================================
+   HUD Overlay Styles
+   ============================================ */
 
 .hud-overlay {
   pointer-events: none;
+  user-select: none;
 }
 
 .hud-overlay > * {
   pointer-events: auto;
 }
 
-/* Pixel-perfect text for game UI */
-.game-text {
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Smooth transitions for UI elements */
-.ui-transition {
+.hud-card {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
 }
 
-/* Typewriter effect for dialogue */
+.hud-card:hover {
+  transform: scale(1.02);
+}
+
+/* ============================================
+   Glow Effects
+   ============================================ */
+
+.shadow-glow {
+  box-shadow: 
+    0 0 10px 2px var(--cozy-golden),
+    0 0 20px 4px rgba(255, 215, 0, 0.3);
+}
+
+.shadow-glow-cyan {
+  box-shadow: 
+    0 0 10px 2px #06b6d4,
+    0 0 20px 4px rgba(6, 182, 212, 0.4);
+}
+
+.shadow-glow-primary {
+  box-shadow: 
+    0 0 10px 2px var(--primary),
+    0 0 20px 4px rgba(255, 180, 100, 0.3);
+}
+
+.drop-shadow-glow {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* ============================================
+   Custom Animations
+   ============================================ */
+
+@keyframes pulse-slow {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 1.5s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-5px) rotate(1deg); }
+  50% { transform: translateY(-8px) rotate(0deg); }
+  75% { transform: translateY(-5px) rotate(-1deg); }
+}
+
+.float-animation {
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
 @keyframes typewriter {
   from { width: 0; }
   to { width: 100%; }
@@ -148,22 +243,280 @@
   animation: typewriter 2s steps(40) forwards;
 }
 
-/* Floating animation for UI elements */
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-.float-animation {
-  animation: float 3s ease-in-out infinite;
-}
-
-/* Pulse glow for interactables */
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 5px 2px var(--cozy-golden); }
-  50% { box-shadow: 0 0 20px 8px var(--cozy-golden); }
+  0%, 100% { 
+    box-shadow: 0 0 5px 2px var(--cozy-golden);
+    opacity: 0.8;
+  }
+  50% { 
+    box-shadow: 0 0 25px 10px var(--cozy-golden);
+    opacity: 1;
+  }
 }
 
 .pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 4s ease infinite;
+}
+
+/* ============================================
+   Loading States
+   ============================================ */
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--muted);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: loading-dot 1.4s ease-in-out infinite;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: 0s; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes loading-dot {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* ============================================
+   Pixel-Perfect Text
+   ============================================ */
+
+.game-text {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.pixel-font {
+  font-family: var(--font-mono), monospace;
+  letter-spacing: 0.05em;
+}
+
+/* ============================================
+   Dialogue Styles
+   ============================================ */
+
+.dialogue-box {
+  background: linear-gradient(
+    180deg,
+    rgba(26, 26, 46, 0.98) 0%,
+    rgba(22, 33, 62, 0.98) 100%
+  );
+  border: 2px solid var(--primary);
+  box-shadow: 
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 10px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.dialogue-choice {
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.dialogue-choice:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+  transform: translateX(4px);
+}
+
+/* ============================================
+   Inventory & Item Styles
+   ============================================ */
+
+.item-slot {
+  background: linear-gradient(
+    135deg,
+    var(--muted) 0%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+  border: 2px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.item-slot:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 10px var(--primary);
+}
+
+.item-slot.rarity-common { border-color: #9CA3AF; }
+.item-slot.rarity-uncommon { border-color: #22C55E; }
+.item-slot.rarity-rare { border-color: #3B82F6; }
+.item-slot.rarity-legendary { 
+  border-color: #F59E0B;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+}
+
+/* ============================================
+   Quest & Journal Styles
+   ============================================ */
+
+.quest-card {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 34, 50, 0.95) 0%,
+    rgba(20, 20, 35, 0.95) 100%
+  );
+  border-left: 4px solid var(--primary);
+}
+
+.quest-card.completed {
+  border-left-color: #22C55E;
+  opacity: 0.7;
+}
+
+/* ============================================
+   Button Enhancements
+   ============================================ */
+
+.btn-game {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-game::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.btn-game:hover::before {
+  left: 100%;
+}
+
+.btn-game:active {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   Tooltip Styles
+   ============================================ */
+
+.tooltip-game {
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+/* ============================================
+   Scrollbar Styles
+   ============================================ */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--ring);
+}
+
+/* ============================================
+   Responsive Adjustments
+   ============================================ */
+
+@media (max-width: 768px) {
+  .hud-card {
+    transform: scale(0.9);
+    transform-origin: top left;
+  }
+  
+  .hud-overlay .absolute.top-4.right-4 {
+    transform: scale(0.85);
+    transform-origin: top right;
+  }
+}
+
+/* ============================================
+   Accessibility
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --border: oklch(0.5 0.02 260);
+    --muted-foreground: oklch(0.75 0.02 260);
+  }
+  
+  .hud-card {
+    border-width: 2px;
+  }
 }

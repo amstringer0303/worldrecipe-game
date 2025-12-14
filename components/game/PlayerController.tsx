@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { RigidBody, CapsuleCollider, RapierRigidBody } from '@react-three/rapier';
-import { RoundedBox } from '@react-three/drei';
+import { RoundedBox, Trail, Sparkles, Float } from '@react-three/drei';
 import * as THREE from 'three';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import { useGameStore } from '@/lib/store/gameStore';
@@ -12,22 +12,20 @@ import { useGameStore } from '@/lib/store/gameStore';
 // Input Handler - Keyboard state using ref for real-time access
 // ============================================
 const useKeyboard = () => {
-  // Use ref instead of state to avoid re-render issues and stale closures
   const keysRef = useRef({
     forward: false,
     backward: false,
     left: false,
     right: false,
     interact: false,
+    sprint: false,
   });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check both e.code and e.key for compatibility across browsers
       const code = e.code;
       const key = e.key;
       
-      // Prevent default for arrow keys to stop page scrolling
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(code) ||
           ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(key)) {
         e.preventDefault();
@@ -53,35 +51,36 @@ const useKeyboard = () => {
       if (code === 'KeyE' || code === 'Space' || key === 'e' || key === 'E' || key === ' ') {
         keysRef.current.interact = true;
       }
+      // Sprint (Shift)
+      if (code === 'ShiftLeft' || code === 'ShiftRight') {
+        keysRef.current.sprint = true;
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const code = e.code;
       const key = e.key;
       
-      // Forward
       if (code === 'KeyW' || code === 'ArrowUp' || key === 'ArrowUp' || key === 'w' || key === 'W') {
         keysRef.current.forward = false;
       }
-      // Backward
       if (code === 'KeyS' || code === 'ArrowDown' || key === 'ArrowDown' || key === 's' || key === 'S') {
         keysRef.current.backward = false;
       }
-      // Left
       if (code === 'KeyA' || code === 'ArrowLeft' || key === 'ArrowLeft' || key === 'a' || key === 'A') {
         keysRef.current.left = false;
       }
-      // Right
       if (code === 'KeyD' || code === 'ArrowRight' || key === 'ArrowRight' || key === 'd' || key === 'D') {
         keysRef.current.right = false;
       }
-      // Interact
       if (code === 'KeyE' || code === 'Space' || key === 'e' || key === 'E' || key === ' ') {
         keysRef.current.interact = false;
       }
+      if (code === 'ShiftLeft' || code === 'ShiftRight') {
+        keysRef.current.sprint = false;
+      }
     };
 
-    // Add listeners to both window and document for maximum compatibility
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     window.addEventListener('keyup', handleKeyUp, { capture: true });
     document.addEventListener('keydown', handleKeyDown, { capture: true });
@@ -99,138 +98,290 @@ const useKeyboard = () => {
 };
 
 // ============================================
-// Player Visual - The character model
+// Enhanced Player Visual - Better character model
 // ============================================
-function PlayerVisual({ isMoving }: { isMoving: boolean }) {
+function PlayerVisual({ isMoving, isSprinting }: { isMoving: boolean; isSprinting: boolean }) {
   const meshRef = useRef<THREE.Group>(null);
   const bobOffset = useRef(0);
+  const armLeftRef = useRef<THREE.Group>(null);
+  const armRightRef = useRef<THREE.Group>(null);
+  const legLeftRef = useRef<THREE.Group>(null);
+  const legRightRef = useRef<THREE.Group>(null);
   
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!meshRef.current) return;
+    
+    const bobSpeed = isSprinting ? 15 : 10;
+    const bobAmount = isSprinting ? 0.08 : 0.05;
     
     // Bobbing animation when moving
     if (isMoving) {
-      bobOffset.current += delta * 10;
-      meshRef.current.position.y = Math.sin(bobOffset.current) * 0.05;
+      bobOffset.current += delta * bobSpeed;
+      meshRef.current.position.y = Math.sin(bobOffset.current) * bobAmount;
+      
+      // Arm swing
+      if (armLeftRef.current && armRightRef.current) {
+        const armSwing = Math.sin(bobOffset.current) * 0.4;
+        armLeftRef.current.rotation.x = armSwing;
+        armRightRef.current.rotation.x = -armSwing;
+      }
+      
+      // Leg swing
+      if (legLeftRef.current && legRightRef.current) {
+        const legSwing = Math.sin(bobOffset.current) * 0.3;
+        legLeftRef.current.rotation.x = -legSwing;
+        legRightRef.current.rotation.x = legSwing;
+      }
     } else {
       meshRef.current.position.y = THREE.MathUtils.lerp(
         meshRef.current.position.y,
         0,
         delta * 5
       );
+      
+      // Idle breathing animation
+      const breathe = Math.sin(state.clock.elapsedTime * 2) * 0.02;
+      meshRef.current.scale.y = 1 + breathe;
+      
+      // Reset arm/leg positions
+      if (armLeftRef.current) armLeftRef.current.rotation.x = THREE.MathUtils.lerp(armLeftRef.current.rotation.x, 0, delta * 5);
+      if (armRightRef.current) armRightRef.current.rotation.x = THREE.MathUtils.lerp(armRightRef.current.rotation.x, 0, delta * 5);
+      if (legLeftRef.current) legLeftRef.current.rotation.x = THREE.MathUtils.lerp(legLeftRef.current.rotation.x, 0, delta * 5);
+      if (legRightRef.current) legRightRef.current.rotation.x = THREE.MathUtils.lerp(legRightRef.current.rotation.x, 0, delta * 5);
     }
   });
   
   return (
     <group ref={meshRef}>
+      {/* Shadow beneath player */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
+        <circleGeometry args={[0.4, 16]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.3} />
+      </mesh>
+      
       {/* Body */}
       <RoundedBox
-        args={[0.5, 0.7, 0.4]}
-        radius={0.1}
+        args={[0.55, 0.75, 0.45]}
+        radius={0.12}
         smoothness={4}
-        position={[0, 0.35, 0]}
+        position={[0, 0.4, 0]}
         castShadow
       >
-        <meshStandardMaterial color="#FF6B6B" roughness={0.7} />
+        <meshStandardMaterial 
+          color="#FF6B6B" 
+          roughness={0.6}
+          metalness={0.1}
+        />
+      </RoundedBox>
+      
+      {/* Apron detail */}
+      <RoundedBox
+        args={[0.5, 0.5, 0.1]}
+        radius={0.05}
+        smoothness={4}
+        position={[0, 0.35, 0.22]}
+        castShadow
+      >
+        <meshStandardMaterial color="#FFFFFF" roughness={0.7} />
       </RoundedBox>
       
       {/* Head */}
       <RoundedBox
-        args={[0.4, 0.4, 0.35]}
-        radius={0.08}
+        args={[0.45, 0.45, 0.4]}
+        radius={0.1}
         smoothness={4}
-        position={[0, 0.9, 0]}
+        position={[0, 0.98, 0]}
         castShadow
       >
-        <meshStandardMaterial color="#FFE4C9" roughness={0.6} />
+        <meshStandardMaterial color="#FFE4C9" roughness={0.5} />
       </RoundedBox>
       
       {/* Eyes */}
-      <mesh position={[-0.1, 0.95, 0.15]} castShadow>
-        <boxGeometry args={[0.08, 0.08, 0.05]} />
+      <mesh position={[-0.12, 1.02, 0.18]} castShadow>
+        <boxGeometry args={[0.1, 0.1, 0.06]} />
         <meshStandardMaterial color="#2D2D2D" />
       </mesh>
-      <mesh position={[0.1, 0.95, 0.15]} castShadow>
-        <boxGeometry args={[0.08, 0.08, 0.05]} />
+      <mesh position={[0.12, 1.02, 0.18]} castShadow>
+        <boxGeometry args={[0.1, 0.1, 0.06]} />
         <meshStandardMaterial color="#2D2D2D" />
       </mesh>
       
-      {/* Hat (chef's toque) */}
+      {/* Eye highlights */}
+      <mesh position={[-0.1, 1.04, 0.2]}>
+        <boxGeometry args={[0.03, 0.03, 0.02]} />
+        <meshStandardMaterial color="#FFFFFF" emissive="#FFFFFF" emissiveIntensity={0.3} />
+      </mesh>
+      <mesh position={[0.14, 1.04, 0.2]}>
+        <boxGeometry args={[0.03, 0.03, 0.02]} />
+        <meshStandardMaterial color="#FFFFFF" emissive="#FFFFFF" emissiveIntensity={0.3} />
+      </mesh>
+      
+      {/* Rosy cheeks */}
+      <mesh position={[-0.18, 0.95, 0.15]}>
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshStandardMaterial color="#FFB6C1" transparent opacity={0.6} />
+      </mesh>
+      <mesh position={[0.18, 0.95, 0.15]}>
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshStandardMaterial color="#FFB6C1" transparent opacity={0.6} />
+      </mesh>
+      
+      {/* Smile */}
+      <mesh position={[0, 0.9, 0.19]}>
+        <boxGeometry args={[0.12, 0.03, 0.02]} />
+        <meshStandardMaterial color="#C67B5C" />
+      </mesh>
+      
+      {/* Chef's Hat (toque) */}
       <RoundedBox
-        args={[0.35, 0.3, 0.3]}
-        radius={0.05}
+        args={[0.4, 0.35, 0.35]}
+        radius={0.06}
         smoothness={4}
-        position={[0, 1.2, 0]}
+        position={[0, 1.35, 0]}
         castShadow
       >
-        <meshStandardMaterial color="#FFFFFF" roughness={0.5} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.4} />
       </RoundedBox>
-      <mesh position={[0, 1.4, 0]} castShadow>
-        <cylinderGeometry args={[0.15, 0.18, 0.15, 8]} />
-        <meshStandardMaterial color="#FFFFFF" roughness={0.5} />
+      <mesh position={[0, 1.58, 0]} castShadow>
+        <cylinderGeometry args={[0.18, 0.2, 0.2, 8]} />
+        <meshStandardMaterial color="#FFFFFF" roughness={0.4} />
+      </mesh>
+      {/* Hat band */}
+      <mesh position={[0, 1.2, 0]}>
+        <cylinderGeometry args={[0.22, 0.22, 0.05, 8]} />
+        <meshStandardMaterial color="#FFD700" roughness={0.3} metalness={0.5} />
       </mesh>
       
       {/* Arms */}
-      <RoundedBox
-        args={[0.15, 0.4, 0.15]}
-        radius={0.03}
-        smoothness={4}
-        position={[-0.35, 0.35, 0]}
-        castShadow
-      >
-        <meshStandardMaterial color="#FFE4C9" roughness={0.6} />
-      </RoundedBox>
-      <RoundedBox
-        args={[0.15, 0.4, 0.15]}
-        radius={0.03}
-        smoothness={4}
-        position={[0.35, 0.35, 0]}
-        castShadow
-      >
-        <meshStandardMaterial color="#FFE4C9" roughness={0.6} />
-      </RoundedBox>
+      <group ref={armLeftRef} position={[-0.38, 0.45, 0]}>
+        <RoundedBox
+          args={[0.18, 0.45, 0.18]}
+          radius={0.04}
+          smoothness={4}
+          position={[0, -0.1, 0]}
+          castShadow
+        >
+          <meshStandardMaterial color="#FFE4C9" roughness={0.5} />
+        </RoundedBox>
+      </group>
+      <group ref={armRightRef} position={[0.38, 0.45, 0]}>
+        <RoundedBox
+          args={[0.18, 0.45, 0.18]}
+          radius={0.04}
+          smoothness={4}
+          position={[0, -0.1, 0]}
+          castShadow
+        >
+          <meshStandardMaterial color="#FFE4C9" roughness={0.5} />
+        </RoundedBox>
+      </group>
       
       {/* Legs */}
-      <RoundedBox
-        args={[0.18, 0.25, 0.18]}
-        radius={0.03}
-        smoothness={4}
-        position={[-0.12, -0.12, 0]}
-        castShadow
-      >
-        <meshStandardMaterial color="#4A4A4A" roughness={0.8} />
-      </RoundedBox>
-      <RoundedBox
-        args={[0.18, 0.25, 0.18]}
-        radius={0.03}
-        smoothness={4}
-        position={[0.12, -0.12, 0]}
-        castShadow
-      >
-        <meshStandardMaterial color="#4A4A4A" roughness={0.8} />
-      </RoundedBox>
+      <group ref={legLeftRef} position={[-0.14, 0, 0]}>
+        <RoundedBox
+          args={[0.2, 0.3, 0.2]}
+          radius={0.04}
+          smoothness={4}
+          position={[0, -0.1, 0]}
+          castShadow
+        >
+          <meshStandardMaterial color="#4A4A4A" roughness={0.7} />
+        </RoundedBox>
+        {/* Shoe */}
+        <mesh position={[0, -0.25, 0.05]} castShadow>
+          <boxGeometry args={[0.2, 0.1, 0.25]} />
+          <meshStandardMaterial color="#8B4513" roughness={0.8} />
+        </mesh>
+      </group>
+      <group ref={legRightRef} position={[0.14, 0, 0]}>
+        <RoundedBox
+          args={[0.2, 0.3, 0.2]}
+          radius={0.04}
+          smoothness={4}
+          position={[0, -0.1, 0]}
+          castShadow
+        >
+          <meshStandardMaterial color="#4A4A4A" roughness={0.7} />
+        </RoundedBox>
+        {/* Shoe */}
+        <mesh position={[0, -0.25, 0.05]} castShadow>
+          <boxGeometry args={[0.2, 0.1, 0.25]} />
+          <meshStandardMaterial color="#8B4513" roughness={0.8} />
+        </mesh>
+      </group>
+      
+      {/* Movement particles when sprinting */}
+      {isSprinting && (
+        <Sparkles 
+          count={15}
+          scale={[1, 0.5, 1]}
+          size={1}
+          speed={2}
+          opacity={0.5}
+          color="#FFD700"
+          position={[0, 0.2, -0.3]}
+        />
+      )}
     </group>
   );
 }
 
 // ============================================
-// Camera Follow Logic
+// Camera Follow Logic - MUCH CLOSER & SMOOTHER
 // ============================================
-function useCameraFollow(targetPosition: THREE.Vector3) {
+function useCameraFollow(targetPosition: THREE.Vector3, isMoving: boolean) {
   const { camera } = useThree();
-  const cameraOffset = useRef(new THREE.Vector3(10, 10, 10));
-  const smoothPosition = useRef(new THREE.Vector3());
   
-  useFrame((_, delta) => {
-    // Target camera position
-    const targetCamPos = targetPosition.clone().add(cameraOffset.current);
+  // MUCH CLOSER camera offset for immersive feel
+  const baseOffset = useMemo(() => new THREE.Vector3(4, 5, 4), []);
+  const cameraOffset = useRef(baseOffset.clone());
+  const smoothPosition = useRef(new THREE.Vector3());
+  const lookAtTarget = useRef(new THREE.Vector3());
+  const shakeOffset = useRef(new THREE.Vector3());
+  
+  useEffect(() => {
+    // Initialize camera position
+    smoothPosition.current.copy(targetPosition).add(baseOffset);
+    camera.position.copy(smoothPosition.current);
+  }, [camera, targetPosition, baseOffset]);
+  
+  useFrame((state, delta) => {
+    // Clamp delta to prevent huge jumps
+    const clampedDelta = Math.min(delta, 0.1);
     
-    // Smooth camera movement
-    smoothPosition.current.lerp(targetCamPos, delta * 3);
+    // Dynamic camera offset - slightly closer when moving
+    const dynamicOffset = baseOffset.clone();
+    if (isMoving) {
+      dynamicOffset.multiplyScalar(0.95);
+    }
+    
+    // Subtle camera shake when moving
+    if (isMoving) {
+      shakeOffset.current.set(
+        Math.sin(state.clock.elapsedTime * 15) * 0.02,
+        Math.sin(state.clock.elapsedTime * 20) * 0.01,
+        Math.cos(state.clock.elapsedTime * 15) * 0.02
+      );
+    } else {
+      shakeOffset.current.lerp(new THREE.Vector3(), clampedDelta * 5);
+    }
+    
+    // Target camera position
+    const targetCamPos = targetPosition.clone()
+      .add(dynamicOffset)
+      .add(shakeOffset.current);
+    
+    // Very smooth camera movement
+    smoothPosition.current.lerp(targetCamPos, clampedDelta * 4);
     camera.position.copy(smoothPosition.current);
     
-    // Always look at the player
-    camera.lookAt(targetPosition);
+    // Smooth look-at with slight lead
+    const lookAhead = isMoving ? 0.5 : 0;
+    const targetLookAt = targetPosition.clone();
+    targetLookAt.y += 0.8; // Look at character's head level
+    
+    lookAtTarget.current.lerp(targetLookAt, clampedDelta * 6);
+    camera.lookAt(lookAtTarget.current);
   });
 }
 
@@ -250,37 +401,34 @@ export function PlayerController() {
   const dialogueActive = useGameStore((s) => s.dialogueState.active);
   const advanceTime = useGameStore((s) => s.advanceTime);
   
-  // Movement settings
-  const moveSpeed = 5;
-  const rotationSpeed = 8;
+  // Movement settings - INCREASED for better feel
+  const baseMoveSpeed = 6;
+  const sprintMultiplier = 1.6;
+  const rotationSpeed = 10;
   
   // Current position for camera follow
   const currentPosition = useRef(new THREE.Vector3(0, 0.5, 0));
+  const isSprinting = useRef(false);
   
   // Camera follow
-  useCameraFollow(currentPosition.current);
+  useCameraFollow(currentPosition.current, isMoving);
   
   useFrame((_, delta) => {
-    // Early return if physics body not ready
     if (!rigidBodyRef.current) return;
     
-    // Protect against invalid delta
     if (!Number.isFinite(delta) || delta <= 0 || delta > 0.1) {
-      delta = 0.016; // Default to ~60fps
+      delta = 0.016;
     }
     
-    // Block movement when paused or in dialogue
     const canMove = !isPaused && !dialogueActive;
     
-    // Advance game time only when not paused
     if (!isPaused) {
       advanceTime(delta);
     }
     
-    // Access current key state from ref
     const keys = keysRef.current;
+    isSprinting.current = keys.sprint && canMove;
     
-    // Calculate movement direction
     let moveX = 0;
     let moveZ = 0;
     
@@ -298,29 +446,28 @@ export function PlayerController() {
       moveZ /= length;
     }
     
-    // Wrap all rigid body operations in try-catch to prevent WASM crashes
+    // Calculate speed
+    const currentSpeed = baseMoveSpeed * (isSprinting.current ? sprintMultiplier : 1);
+    
     try {
-      // Apply velocity
       const currentVel = rigidBodyRef.current.linvel();
       if (currentVel && Number.isFinite(currentVel.y)) {
         rigidBodyRef.current.setLinvel(
           {
-            x: moveX * moveSpeed,
+            x: moveX * currentSpeed,
             y: currentVel.y,
-            z: moveZ * moveSpeed,
+            z: moveZ * currentSpeed,
           },
           true
         );
       }
       
-      // Update position in store (with NaN protection)
       const position = rigidBodyRef.current.translation();
       if (position && Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z)) {
         currentPosition.current.set(position.x, position.y, position.z);
         setPosition([position.x, position.y, position.z]);
       }
     } catch (e) {
-      // Physics body may not be ready yet, silently ignore
       console.debug('Physics not ready:', e);
       return;
     }
@@ -336,10 +483,8 @@ export function PlayerController() {
       const targetRotation = Math.atan2(moveX, moveZ);
       const currentRotation = playerGroupRef.current.rotation.y;
       
-      // Smooth rotation
       let rotationDiff = targetRotation - currentRotation;
       
-      // Normalize to -PI to PI
       while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
       while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
       
@@ -353,17 +498,25 @@ export function PlayerController() {
       ref={rigidBodyRef}
       position={[0, 1, 0]}
       enabledRotations={[false, false, false]}
-      linearDamping={5}
-      angularDamping={5}
+      linearDamping={6}
+      angularDamping={6}
       colliders={false}
+      mass={1}
     >
-      <CapsuleCollider args={[0.3, 0.25]} position={[0, 0.55, 0]} />
+      <CapsuleCollider args={[0.35, 0.3]} position={[0, 0.65, 0]} />
       <group ref={playerGroupRef}>
-        <PlayerVisual isMoving={isMoving} />
+        <PlayerVisual isMoving={isMoving} isSprinting={isSprinting.current} />
+        
+        {/* Player indicator light */}
+        <pointLight 
+          position={[0, 1.8, 0]} 
+          color="#FFD700" 
+          intensity={0.3} 
+          distance={3}
+        />
       </group>
     </RigidBody>
   );
 }
 
 export default PlayerController;
-
