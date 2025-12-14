@@ -153,8 +153,8 @@ function AtmosphericEffects() {
         </Float>
       )}
       
-      {/* Fog */}
-      <fog attach="fog" args={[fogColor, 30, 80]} />
+      {/* Subtle fog - far enough to not cause ground flickering */}
+      <fog attach="fog" args={[fogColor, 50, 120]} />
     </>
   );
 }
@@ -290,40 +290,40 @@ function BoardBoundaries({ width = 50, height = 50 }: { width?: number; height?:
         <CuboidCollider args={[wallThickness / 2, wallHeight, height / 2 + wallThickness]} />
       </RigidBody>
       
-      {/* Visual border decoration - glowing edge posts */}
-      {Array.from({ length: 20 }).map((_, i) => {
+      {/* Visual border decoration - glowing edge posts (every 5th post for performance) */}
+      {Array.from({ length: 10 }).map((_, i) => {
         const positions = [
-          [-width / 2 + (i * width / 19), 0, -height / 2],
-          [-width / 2 + (i * width / 19), 0, height / 2],
-          [-width / 2, 0, -height / 2 + (i * height / 19)],
-          [width / 2, 0, -height / 2 + (i * height / 19)],
+          [-width / 2 + (i * width / 9), 0, -height / 2],
+          [-width / 2 + (i * width / 9), 0, height / 2],
+          [-width / 2, 0, -height / 2 + (i * height / 9)],
+          [width / 2, 0, -height / 2 + (i * height / 9)],
         ];
         
         return positions.map((pos, j) => (
           <group key={`post-${i}-${j}`} position={pos as [number, number, number]}>
-            {/* Base stone */}
-            <mesh castShadow position={[0, 0.15, 0]}>
-              <cylinderGeometry args={[0.3, 0.4, 0.3, 6]} />
+            {/* Base stone - elevated */}
+            <mesh castShadow position={[0, 0.2, 0]}>
+              <cylinderGeometry args={[0.25, 0.35, 0.4, 6]} />
               <meshStandardMaterial color="#5a5a6a" roughness={0.9} />
             </mesh>
             {/* Glowing crystal */}
-            <mesh position={[0, 0.5, 0]}>
-              <octahedronGeometry args={[0.15, 0]} />
+            <mesh position={[0, 0.55, 0]}>
+              <octahedronGeometry args={[0.12, 0]} />
               <meshStandardMaterial 
                 color="#FFD700" 
                 emissive="#FFD700" 
-                emissiveIntensity={0.5}
+                emissiveIntensity={0.6}
                 roughness={0.2}
                 metalness={0.8}
               />
             </mesh>
-            {/* Point light for glow effect */}
-            {i % 5 === 0 && (
+            {/* Point light for glow effect - only every other */}
+            {i % 3 === 0 && (
               <pointLight 
-                position={[0, 0.5, 0]} 
+                position={[0, 0.55, 0]} 
                 color="#FFD700" 
-                intensity={0.3} 
-                distance={3}
+                intensity={0.4} 
+                distance={4}
               />
             )}
           </group>
@@ -373,16 +373,16 @@ function EnhancedGround({ width = 50, height = 50 }: { width?: number; height?: 
   
   return (
     <group>
-      {/* Main ground with slight elevation for board feel */}
+      {/* Main ground - single solid surface to prevent z-fighting */}
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider 
-          args={[width / 2 + 2, 0.5, height / 2 + 2]} 
-          position={[0, -0.5, 0]} 
+          args={[width / 2 + 2, 1, height / 2 + 2]} 
+          position={[0, -1, 0]} 
         />
         
-        {/* Top surface */}
-        <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[width, height, 32, 32]} />
+        {/* Main ground box instead of plane to prevent flickering */}
+        <mesh receiveShadow castShadow position={[0, -0.25, 0]}>
+          <boxGeometry args={[width, 0.5, height]} />
           <meshStandardMaterial 
             color={groundColor}
             roughness={0.85}
@@ -391,9 +391,9 @@ function EnhancedGround({ width = 50, height = 50 }: { width?: number; height?: 
         </mesh>
       </RigidBody>
       
-      {/* Elevated board edge - gives it a board game feel */}
-      <mesh receiveShadow position={[0, -0.15, 0]}>
-        <boxGeometry args={[width + 1, 0.3, height + 1]} />
+      {/* Board frame - outer edge decoration */}
+      <mesh receiveShadow position={[0, -0.5, 0]}>
+        <boxGeometry args={[width + 2, 0.5, height + 2]} />
         <meshStandardMaterial 
           color="#3d3d4d"
           roughness={0.9}
@@ -401,19 +401,13 @@ function EnhancedGround({ width = 50, height = 50 }: { width?: number; height?: 
         />
       </mesh>
       
-      {/* Decorative base layer */}
-      <mesh receiveShadow position={[0, -0.35, 0]}>
-        <boxGeometry args={[width + 2, 0.2, height + 2]} />
+      {/* Base platform */}
+      <mesh receiveShadow position={[0, -0.8, 0]}>
+        <boxGeometry args={[width + 4, 0.3, height + 4]} />
         <meshStandardMaterial 
           color="#2d2d3d"
           roughness={0.95}
         />
-      </mesh>
-      
-      {/* Shadow catcher underneath */}
-      <mesh receiveShadow position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[width + 10, height + 10]} />
-        <shadowMaterial opacity={0.3} />
       </mesh>
     </group>
   );
@@ -636,6 +630,13 @@ export function GameCanvas() {
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.2,
           powerPreference: 'high-performance',
+          logarithmicDepthBuffer: true, // Prevents z-fighting
+          precision: 'highp',
+        }}
+        camera={{
+          near: 0.1,
+          far: 200,
+          fov: 50,
         }}
         onCreated={(state) => {
           state.gl.setClearColor(skyColor);

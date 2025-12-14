@@ -153,12 +153,6 @@ function PlayerVisual({ isMoving, isSprinting }: { isMoving: boolean; isSprintin
   
   return (
     <group ref={meshRef}>
-      {/* Shadow beneath player */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
-        <circleGeometry args={[0.4, 16]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.3} />
-      </mesh>
-      
       {/* Body */}
       <RoundedBox
         args={[0.55, 0.75, 0.45]}
@@ -315,13 +309,35 @@ function PlayerVisual({ isMoving, isSprinting }: { isMoving: boolean; isSprintin
         <Sparkles 
           count={15}
           scale={[1, 0.5, 1]}
-          size={1}
+          size={1.5}
           speed={2}
-          opacity={0.5}
+          opacity={0.6}
           color="#FFD700"
           position={[0, 0.2, -0.3]}
         />
       )}
+      
+      {/* Ambient sparkles around player - always visible */}
+      <Sparkles 
+        count={8}
+        scale={[1.5, 2, 1.5]}
+        size={0.8}
+        speed={0.3}
+        opacity={0.4}
+        color="#FFFFFF"
+        position={[0, 1, 0]}
+      />
+      
+      {/* Player halo/glow ring */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <ringGeometry args={[0.5, 0.6, 16]} />
+        <meshBasicMaterial 
+          color="#FFD700" 
+          transparent 
+          opacity={0.3}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
     </group>
   );
 }
