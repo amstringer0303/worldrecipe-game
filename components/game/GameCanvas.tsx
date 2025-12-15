@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useCallback, useRef, useMemo } from 'react';
+import { normalizePosition } from '@/types/game';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { 
   Stars,
@@ -23,9 +24,11 @@ import { PlayerController } from './PlayerController';
 import { VoxelTerrain } from './VoxelTerrain';
 import { NPCManager } from './NPCController';
 import { InteractableManager } from './Interactable';
+import { PortalBoard } from './PortalBoard';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useWorldStore } from '@/lib/store/worldStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
+import { usePortalStore } from '@/lib/store/portalStore';
 
 // ============================================
 // Post-Processing Effects
@@ -457,10 +460,16 @@ function FallbackGround() {
 function WorldContent() {
   const world = useWorldStore((s) => s.world);
   const region = useWorldStore((s) => s.currentRegion);
+  const isInPortal = usePortalStore((s) => s.isInPortal);
+  const enterPortal = usePortalStore((s) => s.enterPortal);
+  const returnToHub = usePortalStore((s) => s.returnToHub);
+  const canAccessPortal = usePortalStore((s) => s.canAccessPortal);
   const startDialogue = useGameStore((s) => s.startDialogue);
   const addItem = usePlayerStore((s) => s.addItem);
   const collectedItemIds = usePlayerStore((s) => s.collectedItemIds);
   const checkAndUpdateTalkObjectives = usePlayerStore((s) => s.checkAndUpdateTalkObjectives);
+  const showInteractionPrompt = useGameStore((s) => s.showInteractionPrompt);
+  const hideInteractionPrompt = useGameStore((s) => s.hideInteractionPrompt);
   
   const handleNPCInteract = useCallback((npcId: string) => {
     const npc = world?.npcRoster.find((n) => n.npcId === npcId);
@@ -492,6 +501,61 @@ function WorldContent() {
       });
     }
   }, [world, addItem]);
+  
+  const handlePortalInteract = useCallback(async (poi: any) => {
+    if (poi.type !== 'portal') return;
+    
+    // Check if it's a return portal
+    if (poi.isReturnPortal) {
+      await returnToHub();
+      return;
+    }
+    
+    // Check access
+    if (!canAccessPortal(poi)) {
+      showInteractionPrompt(
+        poi.portalType === 'kitchen' 
+          ? 'Collect all ingredients to unlock the kitchen!' 
+          : 'Cannot access this portal',
+        poi.poiId,
+        'poi'
+      );
+      return;
+    }
+    
+    // Enter portal
+    await enterPortal(poi);
+  }, [enterPortal, returnToHub, canAccessPortal, showInteractionPrompt]);
+  
+  // If in portal, render portal board
+  if (isInPortal) {
+    const portalBoard = usePortalStore.getState().getCurrentPortalBoard();
+    if (!portalBoard || !world) {
+      return <FallbackGround />;
+    }
+    
+    const mapWidth = portalBoard.mapSpec.grid.width;
+    const mapHeight = portalBoard.mapSpec.grid.height;
+    
+    return (
+      <>
+        {/* Enhanced ground */}
+        <EnhancedGround width={mapWidth} height={mapHeight} />
+        
+        {/* Guardrails */}
+        <BoardBoundaries width={mapWidth} height={mapHeight} />
+        
+        {/* Portal board content */}
+        <PortalBoard 
+          onNPCInteract={handleNPCInteract}
+          onIngredientPickup={handleIngredientPickup}
+        />
+        
+        {/* Portal interaction handler */}
+        <PortalInteractionHandler onPortalInteract={handlePortalInteract} />
+      </>
+    );
+  }
   
   // Get map dimensions
   const mapWidth = region?.mapSpec?.grid?.width || 50;
@@ -533,8 +597,111 @@ function WorldContent() {
         mapWidth={mapWidth}
         mapHeight={mapHeight}
       />
+      
+      {/* Portal interaction handler */}
+      <PortalInteractionHandler onPortalInteract={handlePortalInteract} />
     </>
   );
+}
+
+// ============================================
+// Portal Interaction Handler
+// ============================================
+
+function PortalInteractionHandler({ onPortalInteract }: { onPortalInteract: (poi: any) => void }) {
+  const world = useWorldStore((s) => s.world);
+  const region = useWorldStore((s) => s.currentRegion);
+  const isInPortal = usePortalStore((s) => s.isInPortal);
+  const portalBoard = usePortalStore((s) => s.getCurrentPortalBoard());
+  const playerPosition = usePlayerStore((s) => s.position);
+  const showInteractionPrompt = useGameStore((s) => s.showInteractionPrompt);
+  const hideInteractionPrompt = useGameStore((s) => s.hideInteractionPrompt);
+  const canAccessPortal = usePortalStore((s) => s.canAccessPortal);
+  
+  useEffect(() => {
+    let currentPoi: any = null;
+    let handleKeyDown: ((e: KeyboardEvent) => void) | null = null;
+    
+    const checkPortalProximity = () => {
+      if (!world) {
+        hideInteractionPrompt();
+        return;
+      }
+      
+      // Get POIs based on current location
+      let pois: any[] = [];
+      if (isInPortal && portalBoard) {
+        pois = portalBoard.mapSpec.pois || [];
+      } else if (region) {
+        pois = [...(region.pois || []), ...(region.mapSpec?.pois || [])];
+      }
+      
+      // Find portal POIs
+      const portalPois = pois.filter(p => p.type === 'portal');
+      
+      // Check distance to each portal
+      let foundNearby = false;
+      for (const poi of portalPois) {
+        const [poiX, poiZ] = normalizePosition(poi.position);
+        const distance = Math.sqrt(
+          Math.pow(playerPosition[0] - poiX, 2) + 
+          Math.pow(playerPosition[2] - poiZ, 2)
+        );
+        
+        if (distance < poi.interactRadius) {
+          foundNearby = true;
+          currentPoi = poi;
+          const accessible = canAccessPortal(poi);
+          const promptText = poi.isReturnPortal 
+            ? 'Return to Hub (E)'
+            : accessible 
+              ? `Enter ${poi.name} (E)`
+              : poi.portalType === 'kitchen'
+                ? 'Kitchen Locked - Collect all ingredients!'
+                : 'Cannot access portal';
+          
+          showInteractionPrompt(promptText, poi.poiId, 'poi');
+          
+          // Remove old handler if exists
+          if (handleKeyDown) {
+            window.removeEventListener('keydown', handleKeyDown);
+          }
+          
+          // Add new keyboard handler
+          handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.code === 'KeyE' || e.code === 'Space') && accessible && currentPoi) {
+              onPortalInteract(currentPoi);
+            }
+          };
+          
+          window.addEventListener('keydown', handleKeyDown);
+          break;
+        }
+      }
+      
+      if (!foundNearby) {
+        hideInteractionPrompt();
+        if (handleKeyDown) {
+          window.removeEventListener('keydown', handleKeyDown);
+          handleKeyDown = null;
+        }
+        currentPoi = null;
+      }
+    };
+    
+    const interval = setInterval(checkPortalProximity, 100);
+    checkPortalProximity(); // Initial check
+    
+    return () => {
+      clearInterval(interval);
+      if (handleKeyDown) {
+        window.removeEventListener('keydown', handleKeyDown);
+      }
+      hideInteractionPrompt();
+    };
+  }, [world, region, isInPortal, portalBoard, playerPosition, showInteractionPrompt, hideInteractionPrompt, canAccessPortal, onPortalInteract]);
+  
+  return null;
 }
 
 // ============================================

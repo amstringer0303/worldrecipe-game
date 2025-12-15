@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from '@/lib/store/gameStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import { useWorldStore } from '@/lib/store/worldStore';
+import { usePortalStore } from '@/lib/store/portalStore';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
@@ -80,17 +81,30 @@ function TimeDisplay() {
 function RegionDisplay() {
   const region = useWorldStore((s) => s.currentRegion);
   const world = useWorldStore((s) => s.world);
+  const isInPortal = usePortalStore((s) => s.isInPortal);
+  const portalBoard = usePortalStore((s) => s.getCurrentPortalBoard());
   
-  if (!region || !world) return null;
+  if (!world) return null;
+  
+  // Show portal name if in portal, otherwise show region
+  const displayName = isInPortal && portalBoard 
+    ? portalBoard.name 
+    : region?.name || 'Unknown';
+  
+  const displayDescription = isInPortal && portalBoard
+    ? portalBoard.description
+    : region?.inspiration.countryOrArea || '';
+  
+  const icon = isInPortal ? '🌀' : '🗺️';
   
   return (
     <Card className="hud-card px-4 py-2 bg-card/95 backdrop-blur-md border-primary/20 shadow-lg">
       <div className="flex items-center gap-2">
-        <span className="text-lg">🗺️</span>
+        <span className="text-lg">{icon}</span>
         <div>
-          <p className="text-xs font-bold text-foreground">{region.name}</p>
+          <p className="text-xs font-bold text-foreground">{displayName}</p>
           <p className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-            {region.inspiration.countryOrArea}
+            {displayDescription}
           </p>
         </div>
       </div>
@@ -197,15 +211,17 @@ function MiniMap() {
     };
   });
   
-  const poiIcons: Record<string, string> = {
-    market: '🏪',
-    kitchen_hut: '🏠',
-    dock: '⚓',
-    shrine: '⛩️',
-    farm: '🌾',
-    npc_home: '🏡',
-    gathering_spot: '🌿',
-  };
+  // poiIcons kept for potential future use
+  // const poiIcons: Record<string, string> = {
+  //   market: '🏪',
+  //   kitchen_hut: '🏠',
+  //   dock: '⚓',
+  //   shrine: '⛩️',
+  //   farm: '🌾',
+  //   npc_home: '🏡',
+  //   gathering_spot: '🌿',
+  //   portal: '🌀',
+  // };
   
   const poiColors: Record<string, string> = {
     market: 'bg-yellow-400',
@@ -215,6 +231,15 @@ function MiniMap() {
     farm: 'bg-green-400',
     npc_home: 'bg-orange-400',
     gathering_spot: 'bg-lime-400',
+    portal: 'bg-purple-500',
+  };
+  
+  const portalTypeColors: Record<string, string> = {
+    farm: 'bg-green-500',
+    grocery_store: 'bg-yellow-500',
+    kitchen: 'bg-red-500',
+    foraging_grounds: 'bg-amber-600',
+    exotic_garden: 'bg-purple-500',
   };
   
   const ingredientColors: Record<string, string> = {
@@ -285,10 +310,16 @@ function MiniMap() {
           const x = 50 + (px / mapSize) * 80;
           const y = 50 + (py / mapSize) * 80;
           
+          // Portal POIs get special styling
+          const isPortal = poi.type === 'portal';
+          const portalColor = isPortal && poi.portalType 
+            ? portalTypeColors[poi.portalType] || 'bg-purple-500'
+            : poiColors[poi.type] || 'bg-purple-400';
+          
           return (
             <div
               key={poi.poiId}
-              className={`absolute w-2.5 h-2.5 ${poiColors[poi.type] || 'bg-purple-400'} rounded-sm transform -translate-x-1/2 -translate-y-1/2 opacity-90 border border-white/30`}
+              className={`absolute ${isPortal ? 'w-3 h-3' : 'w-2.5 h-2.5'} ${portalColor} ${isPortal ? 'rounded-full animate-pulse' : 'rounded-sm'} transform -translate-x-1/2 -translate-y-1/2 opacity-90 border-2 ${isPortal ? 'border-white' : 'border-white/30'}`}
               style={{
                 left: `${Math.max(8, Math.min(92, x))}%`,
                 top: `${Math.max(8, Math.min(92, y))}%`,
@@ -406,6 +437,10 @@ function MiniMap() {
               <div className="w-1.5 h-1.5 bg-yellow-300 rounded border border-yellow-500" />
               <span className="text-white/80">Trade items</span>
             </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2.5 h-2.5 bg-purple-500 rounded-full animate-pulse border-2 border-white" />
+              <span className="text-white/80">Portals</span>
+            </div>
             <div className="text-white/40 mt-1 text-[7px]">Click to close</div>
           </div>
         )}
@@ -491,7 +526,6 @@ function DishProgress() {
 function QuestTracker() {
   const activeQuests = usePlayerStore((s) => s.activeQuests);
   const world = useWorldStore((s) => s.world);
-  const inventory = usePlayerStore((s) => s.inventory);
   
   // Helper to get guidance for an objective
   const getObjectiveGuidance = (objective: { type: string; target: string; quantity?: number; completed: boolean }) => {
@@ -610,6 +644,71 @@ function QuestTracker() {
         {completedObjectives === totalObjectives && (
           <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-lg p-2 text-xs text-center">
             <span className="text-emerald-300">✨ Return to quest giver to complete!</span>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ============================================
+// Portal Status Component
+// ============================================
+function PortalStatus() {
+  const world = useWorldStore((s) => s.world);
+  const isInPortal = usePortalStore((s) => s.isInPortal);
+  const canAccessPortal = usePortalStore((s) => s.canAccessPortal);
+  
+  if (!world || isInPortal) return null; // Don't show in portal, only in hub
+  
+  const region = useWorldStore.getState().currentRegion;
+  if (!region) return null;
+  
+  const allPois = [...(region.pois || []), ...(region.mapSpec?.pois || [])];
+  const portalPois = allPois.filter(p => p.type === 'portal');
+  
+  if (portalPois.length === 0) return null;
+  
+  const portalIcons: Record<string, string> = {
+    farm: '🌾',
+    grocery_store: '🏪',
+    kitchen: '🍳',
+    foraging_grounds: '🌿',
+    exotic_garden: '🌺',
+  };
+  
+  return (
+    <Card className="hud-card px-3 py-2 bg-card/90 backdrop-blur-md border-muted/30 max-w-xs shadow-lg mt-2">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-lg">🌀</span>
+        <span className="text-xs font-bold text-foreground">Portals</span>
+      </div>
+      <div className="space-y-1.5">
+        {portalPois.map((poi) => {
+          if (!poi.portalType) return null;
+          const accessible = canAccessPortal(poi);
+          const icon = portalIcons[poi.portalType] || '🌀';
+          
+          return (
+            <div
+              key={poi.poiId}
+              className={`text-xs flex items-center gap-2 p-1.5 rounded transition-all ${
+                accessible 
+                  ? 'text-foreground bg-primary/10' 
+                  : 'text-muted-foreground bg-muted/30 opacity-60'
+              }`}
+            >
+              <span className="text-base">{icon}</span>
+              <span className="flex-1">{poi.name}</span>
+              {poi.portalType === 'kitchen' && !accessible && (
+                <span className="text-[10px] text-amber-400">🔒</span>
+              )}
+            </div>
+          );
+        })}
+        {portalPois.some(p => p.portalType === 'kitchen' && !canAccessPortal(p)) && (
+          <div className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border/30">
+            💡 Collect all ingredients to unlock kitchen!
           </div>
         )}
       </div>
@@ -867,9 +966,10 @@ export function HUD() {
         </div>
       </div>
       
-      {/* Right Side - Quest Tracker */}
-      <div className="absolute top-48 right-4 pointer-events-auto">
+      {/* Right Side - Quest Tracker & Portal Status */}
+      <div className="absolute top-48 right-4 pointer-events-auto space-y-2">
         <QuestTracker />
+        <PortalStatus />
       </div>
       
       {/* Center Top - Getting Started Tip for New Players */}

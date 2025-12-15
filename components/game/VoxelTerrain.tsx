@@ -539,9 +539,20 @@ function POIMarker({ poi, palette }: { poi: POI; palette: any }) {
     kitchen_hut: '#FF6B6B',
     npc_home: '#DEB887',
     gathering_spot: '#9370DB',
+    portal: '#9370DB',
   };
   
-  const markerColor = markerColors[poi.type] || palette.accent;
+  const portalColors: Record<string, string> = {
+    farm: '#90EE90',
+    grocery_store: '#FFD700',
+    kitchen: '#FF6B6B',
+    foraging_grounds: '#8B7355',
+    exotic_garden: '#9370DB',
+  };
+  
+  const markerColor = poi.type === 'portal' && poi.portalType
+    ? portalColors[poi.portalType] || '#9370DB'
+    : markerColors[poi.type] || palette.accent;
   
   const [poiX, poiZ] = normalizePosition(poi.position);
   
@@ -745,6 +756,51 @@ function POIMarker({ poi, palette }: { poi: POI; palette: any }) {
         </group>
       )}
       
+      {/* Portal rendering */}
+      {poi.type === 'portal' && (
+        <group>
+          {/* Portal effect - swirling rings */}
+          <mesh position={[0, 2, 0]} rotation={[0, 0, 0]}>
+            <torusGeometry args={[2, 0.1, 8, 32]} />
+            <meshStandardMaterial 
+              color={markerColor} 
+              emissive={markerColor}
+              emissiveIntensity={1}
+              transparent
+              opacity={0.8}
+            />
+          </mesh>
+          {/* Inner portal glow */}
+          <mesh position={[0, 2, 0]}>
+            <cylinderGeometry args={[1.5, 1.5, 0.2, 32]} />
+            <meshStandardMaterial 
+              color={markerColor}
+              emissive={markerColor}
+              emissiveIntensity={2}
+              transparent
+              opacity={0.6}
+            />
+          </mesh>
+          {/* Portal particles effect */}
+          <Sparkles 
+            count={20}
+            scale={4}
+            size={3}
+            speed={0.5}
+            color={markerColor}
+            opacity={0.8}
+            position={[0, 2, 0]}
+          />
+          {/* Locked indicator for kitchen */}
+          {poi.portalType === 'kitchen' && (
+            <mesh position={[0, 3.5, 0]}>
+              <boxGeometry args={[0.3, 0.5, 0.1]} />
+              <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={1} />
+            </mesh>
+          )}
+        </group>
+      )}
+      
       {/* Floating label indicator */}
       <Float speed={2} rotationIntensity={0} floatIntensity={0.5}>
         <mesh position={[0, 4.5, 0]}>
@@ -924,7 +980,11 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       {mapSpec.terrain.waterBodies
         .filter(wb => isValidPosition(wb.position) && isValidPosition(wb.size))
         .map((wb, i) => (
-          <WaterBody key={`water-${i}`} position={wb.position} size={wb.size} />
+          <WaterBody 
+            key={`water-${i}`} 
+            position={normalizePosition(wb.position)} 
+            size={normalizeSize(wb.size)} 
+          />
         ))}
       
       {/* Paths */}

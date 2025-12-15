@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { ItemStack, Item, QuestChapter, QuestObjective } from '@/types/game';
 import { useNotificationStore } from './notificationStore';
+import { useWorldStore } from './worldStore';
 
 // ============================================
 // Player Store - Player-specific state
@@ -50,6 +51,7 @@ interface PlayerState {
   removeItem: (itemId: string, quantity?: number) => boolean;
   hasItem: (itemId: string, quantity?: number) => boolean;
   getItemCount: (itemId: string) => number;
+  hasAllDishIngredients: () => boolean;
   
   // Quest actions
   acceptQuest: (quest: QuestChapter) => void;
@@ -191,6 +193,22 @@ export const usePlayerStore = create<PlayerState>()(
     getItemCount: (itemId) => {
       const stack = get().inventory.find(s => s.item.itemId === itemId);
       return stack?.quantity ?? 0;
+    },
+    
+    hasAllDishIngredients: () => {
+      const { inventory } = get();
+      const worldStore = useWorldStore.getState();
+      const world = worldStore.world;
+      
+      if (!world) return false;
+      
+      // Get all ingredients required for the dish
+      const requiredIngredients = world.ingredientGraph.ingredients.map(i => i.ingredientId);
+      
+      // Check if player has at least 1 of each required ingredient
+      return requiredIngredients.every(ingredientId => 
+        get().hasItem(ingredientId, 1)
+      );
     },
     
     acceptQuest: (quest) => {

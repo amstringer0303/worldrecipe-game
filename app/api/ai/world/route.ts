@@ -262,11 +262,227 @@ function fixQuestReferences(world: any): any[] {
 }
 
 // ============================================
+// Portal Board Generation Helper
+// ============================================
+
+function createPortalBoards(worldId: string, ingredients: any[], npcRoster: any[]): any[] {
+  const portalTypes: Array<{ type: string; name: string; description: string; ingredientFilter: (i: any) => boolean }> = [
+    {
+      type: 'farm',
+      name: 'Sunny Farm',
+      description: 'A peaceful farm with fresh vegetables and grains',
+      ingredientFilter: (i) => i.category === 'vegetable' || i.category === 'grain' || i.gatherMethod === 'harvest',
+    },
+    {
+      type: 'grocery_store',
+      name: 'Village Market',
+      description: 'A bustling market with packaged goods and trade items',
+      ingredientFilter: (i) => i.gatherMethod === 'trade' || i.category === 'grain',
+    },
+    {
+      type: 'foraging_grounds',
+      name: 'Wild Foraging Grounds',
+      description: 'A natural area rich with wild mushrooms and herbs',
+      ingredientFilter: (i) => i.gatherMethod === 'forage' || i.gatherMethod === 'pickup' || i.category === 'spice',
+    },
+    {
+      type: 'exotic_garden',
+      name: 'Exotic Garden',
+      description: 'A mystical garden with rare spices and special ingredients',
+      ingredientFilter: (i) => i.category === 'spice' || i.rarity === 'rare' || i.rarity === 'legendary',
+    },
+    {
+      type: 'kitchen',
+      name: 'Master Kitchen',
+      description: 'The ultimate cooking station - unlock when you have all ingredients',
+      ingredientFilter: () => false, // Kitchen has no ingredients, it's for cooking
+    },
+  ];
+  
+  const portalBoards = portalTypes.map((portalInfo, index) => {
+    const boardId = `portal_${portalInfo.type}_${worldId}`;
+    
+    // Filter ingredients for this portal
+    const portalIngredients = portalInfo.type === 'kitchen' 
+      ? [] 
+      : ingredients.filter(portalInfo.ingredientFilter).slice(0, 5);
+    
+    // Create NPC for this portal (reuse existing NPCs or create simple ones)
+    const portalNpc = npcRoster[index % npcRoster.length] || {
+      npcId: `npc_portal_${portalInfo.type}`,
+      name: portalInfo.type === 'farm' ? 'Farmer' : portalInfo.type === 'grocery_store' ? 'Merchant' : 'Guide',
+      speciesStyle: 'cozy animal',
+      personality: {
+        archetype: 'Helper',
+        traits: ['friendly', 'helpful'],
+        speakingStyle: 'casual',
+        likes: ['helping', 'sharing'],
+        dislikes: ['trouble'],
+      },
+      role: {
+        job: portalInfo.type === 'farm' ? 'Farmer' : portalInfo.type === 'grocery_store' ? 'Merchant' : 'Guide',
+        services: ['ingredient help', 'tips'],
+      },
+      schedule: [{ timeOfDay: 'day' as const, locationId: boardId, activity: 'working' }],
+      relationship: { startingLevel: 0, maxLevel: 5, levelRewards: [] },
+      questHooks: [],
+      visual: { outfitTags: [], accessoryTags: [] },
+    };
+    
+    return {
+      boardId,
+      portalType: portalInfo.type,
+      name: portalInfo.name,
+      description: portalInfo.description,
+      mapSpec: {
+        grid: { width: 40, height: 40, cellSize: 1 },
+        terrain: {
+          waterBodies: [],
+          elevationHints: [],
+          paths: [],
+        },
+        pois: [
+          {
+            poiId: `return_portal_${boardId}`,
+            type: 'portal' as const,
+            name: 'Return to Hub',
+            position: { x: 5, y: 5 },
+            interactRadius: 2,
+            isReturnPortal: true,
+          },
+        ],
+        spawnPoints: {
+          player: { x: 20, y: 20 },
+          npcSpawns: [{ npcId: portalNpc.npcId, position: { x: 20, y: 25 } }],
+        },
+        decorRules: { density: 0.3, propThemes: [portalInfo.type] },
+      },
+      npc: portalNpc,
+      ingredients: portalIngredients,
+      spawnPoint: { x: 20, y: 20 },
+      palette: {
+        primary: portalInfo.type === 'farm' ? '#90EE90' : portalInfo.type === 'grocery_store' ? '#FFD700' : '#9370DB',
+        secondary: '#B6D0E2',
+        accent: '#FF6B6B',
+        ground: '#C4A484',
+        foliage: '#4A7C59',
+        sky: '#87CEEB',
+        uiBg: '#1a1a2e',
+        uiText: '#ffffff',
+      },
+    };
+  });
+  
+  return portalBoards;
+}
+
+// ============================================
 // Fallback World for Development
 // ============================================
 
 function createFallbackWorld() {
   const worldId = uuidv4();
+  
+  const ingredients = [
+    { ingredientId: 'ing_noodles', name: 'Fresh Noodles', category: 'grain', regionId: 'region_harbor', gatherMethod: 'trade' as const },
+    { ingredientId: 'ing_pork', name: 'Chashu Pork', category: 'protein', regionId: 'region_harbor', gatherMethod: 'trade' as const },
+    { ingredientId: 'ing_egg', name: 'Soft-Boiled Egg', category: 'protein', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
+    { ingredientId: 'ing_egg_2', name: 'Farm Egg', category: 'protein', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
+    { ingredientId: 'ing_seaweed', name: 'Nori Seaweed', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+    { ingredientId: 'ing_seaweed_2', name: 'Dried Seaweed', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+    { ingredientId: 'ing_scallion', name: 'Fresh Scallions', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+    { ingredientId: 'ing_garlic', name: 'Wild Garlic', category: 'spice', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
+    { ingredientId: 'ing_ginger', name: 'Fresh Ginger', category: 'spice', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+    { ingredientId: 'ing_mushroom', name: 'Shiitake Mushroom', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
+    { ingredientId: 'ing_bamboo', name: 'Bamboo Shoot', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+    { ingredientId: 'ing_broth', name: 'Pork Bone Broth', category: 'liquid', regionId: 'region_harbor', gatherMethod: 'craft' as const },
+  ];
+  
+  const npcRoster = [
+    {
+      npcId: 'npc_chef_hana',
+      name: 'Chef Hana',
+      speciesStyle: 'Friendly human chef',
+      personality: {
+        archetype: 'Mentor',
+        traits: ['patient', 'passionate', 'encouraging'],
+        speakingStyle: 'Warm and nurturing, uses cooking metaphors',
+        likes: ['sharing recipes', 'fresh ingredients', 'eager students'],
+        dislikes: ['food waste', 'impatience'],
+      },
+      role: {
+        job: 'Head Chef',
+        services: ['cooking lessons', 'recipe hints', 'ingredient trades'],
+      },
+      schedule: [
+        { timeOfDay: 'morning' as const, locationId: 'poi_market', activity: 'Selecting fresh ingredients' },
+        { timeOfDay: 'day' as const, locationId: 'poi_kitchen', activity: 'Teaching cooking' },
+        { timeOfDay: 'evening' as const, locationId: 'poi_kitchen', activity: 'Preparing dinner' },
+      ],
+      relationship: {
+        startingLevel: 1,
+        maxLevel: 10,
+        levelRewards: ['Basic recipes', 'Advanced techniques', 'Secret family recipe'],
+      },
+      questHooks: ['arc_first_broth'],
+      visual: {
+        outfitTags: ['chef_coat', 'apron'],
+        accessoryTags: ['chef_hat', 'ladle'],
+      },
+    },
+    {
+      npcId: 'npc_fisher_kai',
+      name: 'Kai',
+      speciesStyle: 'Weathered fisherman',
+      personality: {
+        archetype: 'Provider',
+        traits: ['hardy', 'quiet', 'generous'],
+        speakingStyle: 'Few words but meaningful, knows the sea',
+        likes: ['early mornings', 'the ocean', 'good stories'],
+        dislikes: ['storms', 'wastefulness'],
+      },
+      role: {
+        job: 'Fisherman',
+        services: ['fresh fish trades', 'fishing tips', 'boat rides'],
+      },
+      schedule: [
+        { timeOfDay: 'morning' as const, locationId: 'poi_dock', activity: 'Preparing nets' },
+        { timeOfDay: 'day' as const, locationId: 'poi_dock', activity: 'Selling catch' },
+        { timeOfDay: 'evening' as const, locationId: 'poi_market', activity: 'Enjoying dinner' },
+      ],
+      relationship: {
+        startingLevel: 0,
+        maxLevel: 8,
+        levelRewards: ['Fishing lessons', 'Best fishing spots', 'Family boat access'],
+      },
+      questHooks: [],
+      visual: {
+        outfitTags: ['raincoat', 'boots'],
+        accessoryTags: ['fishing_hat', 'net'],
+      },
+    },
+  ];
+  
+  const portalBoards = createPortalBoards(worldId, ingredients, npcRoster);
+  
+  // Create portal POIs in hub
+  const portalPois = portalBoards.map((pb, index) => {
+    const angle = (index / portalBoards.length) * Math.PI * 2;
+    const distance = 15;
+    const x = 20 + Math.cos(angle) * distance;
+    const y = 20 + Math.sin(angle) * distance;
+    
+    return {
+      poiId: `portal_poi_${pb.portalType}`,
+      type: 'portal' as const,
+      name: pb.name,
+      position: { x, y },
+      interactRadius: 3,
+      portalType: pb.portalType,
+      destinationBoardId: pb.boardId,
+      requiredIngredients: pb.portalType === 'kitchen' ? ingredients.map(i => i.ingredientId) : undefined,
+    };
+  });
   
   return {
     worldId,
@@ -313,6 +529,7 @@ function createFallbackWorld() {
             { poiId: 'poi_market', type: 'market' as const, name: 'Harbor Market', position: { x: 10, y: 15 }, interactRadius: 3 },
             { poiId: 'poi_dock', type: 'dock' as const, name: 'Fish Dock', position: { x: 30, y: 20 }, interactRadius: 3 },
             { poiId: 'poi_kitchen', type: 'kitchen_hut' as const, name: 'Seaside Kitchen', position: { x: 20, y: 25 }, interactRadius: 3 },
+            ...portalPois,
           ],
           spawnPoints: {
             player: { x: 20, y: 20 },
@@ -326,20 +543,7 @@ function createFallbackWorld() {
       },
     ],
     ingredientGraph: {
-      ingredients: [
-        { ingredientId: 'ing_noodles', name: 'Fresh Noodles', category: 'grain', regionId: 'region_harbor', gatherMethod: 'trade' as const },
-        { ingredientId: 'ing_pork', name: 'Chashu Pork', category: 'protein', regionId: 'region_harbor', gatherMethod: 'trade' as const },
-        { ingredientId: 'ing_egg', name: 'Soft-Boiled Egg', category: 'protein', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
-        { ingredientId: 'ing_egg_2', name: 'Farm Egg', category: 'protein', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
-        { ingredientId: 'ing_seaweed', name: 'Nori Seaweed', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
-        { ingredientId: 'ing_seaweed_2', name: 'Dried Seaweed', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
-        { ingredientId: 'ing_scallion', name: 'Fresh Scallions', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
-        { ingredientId: 'ing_garlic', name: 'Wild Garlic', category: 'spice', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
-        { ingredientId: 'ing_ginger', name: 'Fresh Ginger', category: 'spice', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
-        { ingredientId: 'ing_mushroom', name: 'Shiitake Mushroom', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
-        { ingredientId: 'ing_bamboo', name: 'Bamboo Shoot', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
-        { ingredientId: 'ing_broth', name: 'Pork Bone Broth', category: 'liquid', regionId: 'region_harbor', gatherMethod: 'craft' as const },
-      ],
+      ingredients,
       dependencies: [
         { from: 'ing_pork', to: 'ing_broth', type: 'requires' as const },
       ],
@@ -387,70 +591,8 @@ function createFallbackWorld() {
         unlocksCookingStepId: 'step_prepare_broth',
       },
     ],
-    npcRoster: [
-      {
-        npcId: 'npc_chef_hana',
-        name: 'Chef Hana',
-        speciesStyle: 'Friendly human chef',
-        personality: {
-          archetype: 'Mentor',
-          traits: ['patient', 'passionate', 'encouraging'],
-          speakingStyle: 'Warm and nurturing, uses cooking metaphors',
-          likes: ['sharing recipes', 'fresh ingredients', 'eager students'],
-          dislikes: ['food waste', 'impatience'],
-        },
-        role: {
-          job: 'Head Chef',
-          services: ['cooking lessons', 'recipe hints', 'ingredient trades'],
-        },
-        schedule: [
-          { timeOfDay: 'morning' as const, locationId: 'poi_market', activity: 'Selecting fresh ingredients' },
-          { timeOfDay: 'day' as const, locationId: 'poi_kitchen', activity: 'Teaching cooking' },
-          { timeOfDay: 'evening' as const, locationId: 'poi_kitchen', activity: 'Preparing dinner' },
-        ],
-        relationship: {
-          startingLevel: 1,
-          maxLevel: 10,
-          levelRewards: ['Basic recipes', 'Advanced techniques', 'Secret family recipe'],
-        },
-        questHooks: ['arc_first_broth'],
-        visual: {
-          outfitTags: ['chef_coat', 'apron'],
-          accessoryTags: ['chef_hat', 'ladle'],
-        },
-      },
-      {
-        npcId: 'npc_fisher_kai',
-        name: 'Kai',
-        speciesStyle: 'Weathered fisherman',
-        personality: {
-          archetype: 'Provider',
-          traits: ['hardy', 'quiet', 'generous'],
-          speakingStyle: 'Few words but meaningful, knows the sea',
-          likes: ['early mornings', 'the ocean', 'good stories'],
-          dislikes: ['storms', 'wastefulness'],
-        },
-        role: {
-          job: 'Fisherman',
-          services: ['fresh fish trades', 'fishing tips', 'boat rides'],
-        },
-        schedule: [
-          { timeOfDay: 'morning' as const, locationId: 'poi_dock', activity: 'Preparing nets' },
-          { timeOfDay: 'day' as const, locationId: 'poi_dock', activity: 'Selling catch' },
-          { timeOfDay: 'evening' as const, locationId: 'poi_market', activity: 'Enjoying dinner' },
-        ],
-        relationship: {
-          startingLevel: 0,
-          maxLevel: 8,
-          levelRewards: ['Fishing lessons', 'Best fishing spots', 'Family boat access'],
-        },
-        questHooks: [],
-        visual: {
-          outfitTags: ['raincoat', 'boots'],
-          accessoryTags: ['fishing_hat', 'net'],
-        },
-      },
-    ],
+    npcRoster,
+    portalBoards,
     colorSystem: {
       uiTokens: {
         primary: '#FF6B6B',

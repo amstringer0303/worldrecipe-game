@@ -190,8 +190,12 @@ export const dishSchema = z.object({
 // Map and Region Schemas
 // ============================================
 
+export const portalTypeSchema = z.enum([
+  'farm', 'grocery_store', 'kitchen', 'foraging_grounds', 'exotic_garden'
+]);
+
 export const poiTypeSchema = z.enum([
-  'market', 'dock', 'shrine', 'farm', 'kitchen_hut', 'npc_home', 'gathering_spot'
+  'market', 'dock', 'shrine', 'farm', 'kitchen_hut', 'npc_home', 'gathering_spot', 'portal'
 ]);
 
 // Position as object instead of tuple (OpenAI structured outputs don't support tuples)
@@ -206,6 +210,11 @@ export const poiSchema = z.object({
   name: z.string().describe('Name of the location'),
   position: positionSchema.describe('Grid position'),
   interactRadius: z.number().positive().default(2),
+  // Portal-specific fields
+  portalType: portalTypeSchema.optional().describe('Type of portal if this is a portal POI'),
+  destinationBoardId: z.string().optional().describe('ID of portal board this portal leads to'),
+  requiredIngredients: z.array(z.string()).optional().describe('Required ingredients for kitchen portal'),
+  isReturnPortal: z.boolean().optional().describe('True if this is a return portal in a portal board'),
 });
 
 export const sizeSchema = z.object({
@@ -287,6 +296,22 @@ export const regionSpecSchema = z.object({
 });
 
 // ============================================
+// Portal Board Schema
+// ============================================
+
+export const portalBoardSchema = z.object({
+  boardId: z.string().describe('Unique portal board identifier'),
+  portalType: portalTypeSchema,
+  name: z.string().describe('Name of the portal location'),
+  description: z.string().describe('Description of what this portal offers'),
+  mapSpec: mapSpecSchema,
+  npc: npcSchema,
+  ingredients: z.array(ingredientNodeSchema).min(1).max(10).describe('Ingredients available in this portal'),
+  spawnPoint: positionSchema,
+  palette: paletteSchema,
+});
+
+// ============================================
 // World Recipe - Main Schema
 // ============================================
 
@@ -298,6 +323,7 @@ export const worldRecipeSchema = z.object({
   ingredientGraph: ingredientGraphSchema,
   questArcs: z.array(questArcSchema).min(1).max(10),
   npcRoster: z.array(npcSchema).min(2).max(30),
+  portalBoards: z.array(portalBoardSchema).min(0).max(10).optional().describe('Portal boards accessible from hub'),
   colorSystem: z.object({
     uiTokens: z.record(z.string(), z.string()).default({}),
     environmentTokens: z.record(z.string(), z.string()).default({}),
@@ -364,12 +390,14 @@ export type QuestChapter = z.infer<typeof questChapterSchema>;
 export type QuestArc = z.infer<typeof questArcSchema>;
 export type CookingStep = z.infer<typeof cookingStepSchema>;
 export type Dish = z.infer<typeof dishSchema>;
+export type PortalType = z.infer<typeof portalTypeSchema>;
 export type POIType = z.infer<typeof poiTypeSchema>;
 export type POI = z.infer<typeof poiSchema>;
 export type MapSpec = z.infer<typeof mapSpecSchema>;
 export type Palette = z.infer<typeof paletteSchema>;
 export type RegionInspiration = z.infer<typeof regionInspirationSchema>;
 export type RegionSpec = z.infer<typeof regionSpecSchema>;
+export type PortalBoard = z.infer<typeof portalBoardSchema>;
 export type WorldRecipe = z.infer<typeof worldRecipeSchema>;
 export type DialogueTurn = z.infer<typeof dialogueTurnSchema>;
 export type QuestResolution = z.infer<typeof questResolutionSchema>;

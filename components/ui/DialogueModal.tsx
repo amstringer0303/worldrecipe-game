@@ -226,6 +226,14 @@ export function DialogueModal() {
     }
   };
   
+  const handleClose = useCallback(() => {
+    setCurrentDialogue(null);
+    setTextComplete(false);
+    setShowTradeModal(false);
+    setConversationSummary(null);
+    endDialogue();
+  }, [endDialogue]);
+  
   const handleChoiceSelect = useCallback(async (choice: { text: string; effect?: { type: string; value?: string | number } }) => {
     if (!npcId || !world) return;
     
@@ -386,15 +394,7 @@ export function DialogueModal() {
         setIsLoading(false);
       }
     }
-  }, [npcId, world, npc, updateRelationship, acceptQuest, completeQuest, getQuestChapter, addConversationMemory, conversationSummary, getRelationship, activeQuests, completedQuestIds, getAvailableQuestsForNPC, getTradeableIngredients, getConversationMemory, inventory, timeOfDay]);
-  
-  const handleClose = useCallback(() => {
-    setCurrentDialogue(null);
-    setTextComplete(false);
-    setShowTradeModal(false);
-    setConversationSummary(null);
-    endDialogue();
-  }, [endDialogue]);
+  }, [npcId, world, npc, updateRelationship, acceptQuest, completeQuest, getQuestChapter, addConversationMemory, conversationSummary, getRelationship, activeQuests, completedQuestIds, getAvailableQuestsForNPC, getTradeableIngredients, getConversationMemory, inventory, timeOfDay, handleClose]);
   
   // Handle keyboard shortcuts
   useEffect(() => {

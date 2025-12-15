@@ -165,13 +165,21 @@ export function normalizePosition(pos: Position): [number, number] {
   return [pos.x, pos.y];
 }
 
+// Portal types
+export type PortalType = 'farm' | 'grocery_store' | 'kitchen' | 'foraging_grounds' | 'exotic_garden';
+
 // Map and region
 export interface POI {
   poiId: string;
-  type: 'market' | 'dock' | 'shrine' | 'farm' | 'kitchen_hut' | 'npc_home' | 'gathering_spot';
+  type: 'market' | 'dock' | 'shrine' | 'farm' | 'kitchen_hut' | 'npc_home' | 'gathering_spot' | 'portal';
   name: string;
   position: Position;
   interactRadius: number;
+  // Portal-specific fields
+  portalType?: PortalType;
+  destinationBoardId?: string; // ID of the portal board
+  requiredIngredients?: string[]; // For kitchen portal
+  isReturnPortal?: boolean; // True if this is a return portal in a portal board
 }
 
 export type Size = [number, number] | { width: number; height: number };
@@ -261,6 +269,19 @@ export interface IngredientGraph {
   dependencies: DependencyEdge[];
 }
 
+// Portal Board - mini-board accessible via portal
+export interface PortalBoard {
+  boardId: string;
+  portalType: PortalType;
+  name: string;
+  description: string;
+  mapSpec: MapSpec; // Small board (~40x40)
+  npc: NPC; // Single NPC for this board
+  ingredients: IngredientNode[]; // Ingredients available here
+  spawnPoint: Position;
+  palette: Palette;
+}
+
 // World Recipe - main generated object
 export interface WorldRecipe {
   worldId: string;
@@ -270,6 +291,7 @@ export interface WorldRecipe {
   ingredientGraph: IngredientGraph;
   questArcs: QuestArc[];
   npcRoster: NPC[];
+  portalBoards?: PortalBoard[]; // Portal boards accessible from hub
   colorSystem: {
     uiTokens: Record<string, string>;
     environmentTokens: Record<string, string>;

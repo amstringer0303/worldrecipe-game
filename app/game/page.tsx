@@ -9,6 +9,7 @@ import { JournalPanel } from '@/components/ui/JournalPanel';
 import { InventoryPanel } from '@/components/ui/InventoryPanel';
 import { CookingUI } from '@/components/ui/CookingUI';
 import { ToastContainer, AutosaveIndicator } from '@/components/ui/ToastNotifications';
+import { PortalTransition } from '@/components/ui/PortalTransition';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useWorldStore } from '@/lib/store/worldStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
@@ -353,6 +354,9 @@ export default function GamePage() {
       
       {/* Autosave Indicator */}
       <AutosaveIndicator />
+      
+      {/* Portal Transition Animation */}
+      <PortalTransition />
       
       {/* Pause Menu */}
       {isPaused && !dialogueActive && <PauseMenu />}

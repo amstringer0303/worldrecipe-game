@@ -17,6 +17,7 @@ interface WorldState {
   
   // Computed helpers
   getNPC: (npcId: string) => NPC | undefined;
+  getPortalNPC: (npcId: string) => NPC | undefined;
   getQuestArc: (arcId: string) => QuestArc | undefined;
   getRegion: (regionId: string) => RegionSpec | undefined;
   
@@ -58,7 +59,25 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   
   getNPC: (npcId) => {
     const { world } = get();
-    return world?.npcRoster.find(n => n.npcId === npcId);
+    // Check world NPC roster first
+    const worldNpc = world?.npcRoster.find(n => n.npcId === npcId);
+    if (worldNpc) return worldNpc;
+    
+    // Check portal board NPCs
+    return get().getPortalNPC(npcId);
+  },
+  
+  getPortalNPC: (npcId) => {
+    const { world } = get();
+    if (!world?.portalBoards) return undefined;
+    
+    for (const portalBoard of world.portalBoards) {
+      if (portalBoard.npc.npcId === npcId) {
+        return portalBoard.npc;
+      }
+    }
+    
+    return undefined;
   },
   
   getQuestArc: (arcId) => {
