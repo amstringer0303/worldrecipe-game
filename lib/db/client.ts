@@ -6,25 +6,70 @@ import * as schema from './schema';
 // Database Client Setup
 // ============================================
 
-// Create or connect to the SQLite database
-const sqlite = new Database('worldrecipe.db');
+let sqlite: Database.Database | null = null;
+let db: ReturnType<typeof drizzle> | null = null;
 
-// Enable WAL mode for better performance
-sqlite.pragma('journal_mode = WAL');
+// Try to initialize SQLite database
+// Will fail gracefully in serverless environments (Vercel, etc.)
+try {
+  sqlite = new Database('worldrecipe.db');
+  sqlite.pragma('journal_mode = WAL');
+  db = drizzle(sqlite, { schema });
+} catch (error) {
+  // Database unavailable (common in serverless environments)
+  console.warn('SQLite database unavailable:', error instanceof Error ? error.message : error);
+  console.warn('Continuing without database (caching and persistence disabled)');
+  sqlite = null;
+  db = null;
+}
 
-// Create the Drizzle client
-export const db = drizzle(sqlite, { schema });
+// Create a safe database wrapper that handles missing database gracefully
+const safeDb = {
+  query: db?.query || {
+    worlds: {
+      findFirst: async () => null,
+      findMany: async () => [],
+    },
+    aiGenerations: {
+      findFirst: async () => null,
+      findMany: async () => [],
+    },
+    saves: {
+      findFirst: async () => null,
+      findMany: async () => [],
+    },
+    events: {
+      findFirst: async () => null,
+      findMany: async () => [],
+    },
+  },
+  insert: db?.insert || (() => ({
+    values: async () => ({ then: (fn: any) => fn({}) }),
+  })),
+  update: db?.update || (() => ({
+    set: async () => ({ then: (fn: any) => fn({}) }),
+  })),
+  delete: db?.delete || (() => ({
+    where: async () => ({ then: (fn: any) => fn({}) }),
+  })),
+};
+
+// Export the safe database wrapper as the default db
+export { safeDb as db };
 
 // Export schema for use in queries
 export { schema };
 
 // Helper function to close the database connection
 export function closeDatabase() {
-  sqlite.close();
+  if (sqlite) {
+    sqlite.close();
+  }
 }
 
 // Helper to check if database is connected
 export function isDatabaseConnected(): boolean {
+  if (!sqlite || !db) return false;
   try {
     sqlite.pragma('table_info(worlds)');
     return true;

@@ -52,31 +52,40 @@ export async function POST(request: Request) {
       playerPrefs: body.playerPrefs,
     }));
     
-    // Check cache first
-    const cached = await db.query.aiGenerations.findFirst({
-      where: eq(aiGenerations.inputHash, cacheKey),
-    });
-    
-    if (cached) {
-      const cachedWorld = JSON.parse(cached.outputJson);
-      // Update worldId to be unique even for cached results
-      cachedWorld.worldId = worldId;
-      
-      // Store world in database
-      await db.insert(worlds).values({
-        worldId,
-        seed,
-        dishName: cachedWorld.dish.name,
-        modelVersion: 'cached',
-        promptVersion: '1.0',
-        worldJson: JSON.stringify(cachedWorld),
+    // Check cache first (skip if database unavailable)
+    try {
+      const cached = await db.query.aiGenerations.findFirst({
+        where: eq(aiGenerations.inputHash, cacheKey),
       });
       
-      return NextResponse.json({
-        worldId,
-        world: cachedWorld,
-        cached: true,
-      });
+      if (cached) {
+        const cachedWorld = JSON.parse(cached.outputJson);
+        // Update worldId to be unique even for cached results
+        cachedWorld.worldId = worldId;
+        
+        // Store world in database (skip if fails)
+        try {
+          await db.insert(worlds).values({
+            worldId,
+            seed,
+            dishName: cachedWorld.dish.name,
+            modelVersion: 'cached',
+            promptVersion: '1.0',
+            worldJson: JSON.stringify(cachedWorld),
+          });
+        } catch (dbError) {
+          console.warn('Failed to store cached world in database:', dbError);
+        }
+        
+        return NextResponse.json({
+          worldId,
+          world: cachedWorld,
+          cached: true,
+        });
+      }
+    } catch (dbError) {
+      // Database unavailable - continue without cache
+      console.warn('Database unavailable, skipping cache check:', dbError);
     }
     
     // Build the prompt
@@ -126,26 +135,31 @@ export async function POST(request: Request) {
       world.questArcs = fixQuestReferences(world);
     }
     
-    // Store in database
-    await db.insert(worlds).values({
-      worldId,
-      seed,
-      dishName: world.dish.name,
-      modelVersion: 'gpt-4o',
-      promptVersion: '1.0',
-      worldJson: JSON.stringify(world),
-    });
-    
-    // Cache the generation
-    await db.insert(aiGenerations).values({
-      generationId: uuidv4(),
-      worldId,
-      generationType: 'world',
-      inputHash: cacheKey,
-      outputJson: JSON.stringify(world),
-      modelUsed: 'gpt-4o',
-      tokensUsed: usage?.totalTokens,
-    });
+    // Store in database (skip if database unavailable)
+    try {
+      await db.insert(worlds).values({
+        worldId,
+        seed,
+        dishName: world.dish.name,
+        modelVersion: 'gpt-4o',
+        promptVersion: '1.0',
+        worldJson: JSON.stringify(world),
+      });
+      
+      // Cache the generation
+      await db.insert(aiGenerations).values({
+        generationId: uuidv4(),
+        worldId,
+        generationType: 'world',
+        inputHash: cacheKey,
+        outputJson: JSON.stringify(world),
+        modelUsed: 'gpt-4o',
+        tokensUsed: usage?.totalTokens,
+      });
+    } catch (dbError) {
+      // Database unavailable - continue without persistence
+      console.warn('Database unavailable, skipping world storage:', dbError);
+    }
     
     return NextResponse.json({
       worldId,
