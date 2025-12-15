@@ -157,6 +157,22 @@ export function buildWorldGenerationPrompt(dishPrompt: string, seed: string, pre
   }
   
   parts.push(`
+## REQUIRED FIELDS - You MUST include ALL of these:
+
+1. **regions** (array): At least 1 region with mapSpec, pois, spawnPoints, decorRules
+2. **ingredientGraph** (object): Must include:
+   - ingredients (array): At least 3 ingredients with gatherMethod, regionId
+   - dependencies (array): Relationships between ingredients
+3. **questArcs** (array): At least 1 quest arc with chapters containing objectives
+4. **npcRoster** (array): At least 2 NPCs with schedules, personalities, roles
+5. **colorSystem** (object): Must include:
+   - uiTokens (object): UI color tokens
+   - environmentTokens (object): Environment color tokens
+6. **startingInventory** (array): Initial items (can be empty array)
+7. **portalBoards** (array, optional): Portal boards for hub navigation
+
+## World Design Guidelines:
+
 Create a cohesive world where:
 1. Each region contributes unique ingredients to the dish
 2. NPCs have meaningful connections to the cuisine
@@ -164,7 +180,9 @@ Create a cohesive world where:
 4. The ingredient graph forms a satisfying collection journey
 5. Color palettes evoke the cultural inspiration warmly
 
-Make the world feel like a vacation you'd want to take - full of discovery, friendly faces, and delicious possibilities.`);
+Make the world feel like a vacation you'd want to take - full of discovery, friendly faces, and delicious possibilities.
+
+IMPORTANT: Ensure ALL required fields are present in your response. Do not omit ingredientGraph, questArcs, npcRoster, or colorSystem.`);
   
   return parts.join('\n\n');
 }

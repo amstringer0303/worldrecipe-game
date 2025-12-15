@@ -166,10 +166,10 @@ function DishCompleteCeremony({ onClose }: { onClose: () => void }) {
 }
 
 // ============================================
-// Main Game Page
+// Game Page Content (uses searchParams)
 // ============================================
 
-export default function GamePage() {
+function GamePageContent() {
   const [showComplete, setShowComplete] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const hasInitialized = useRef(false);
@@ -364,5 +364,24 @@ export default function GamePage() {
       {/* Dish Complete Ceremony */}
       {showComplete && <DishCompleteCeremony onClose={() => setShowComplete(false)} />}
     </main>
+  );
+}
+
+// ============================================
+// Main Game Page (wraps content in Suspense)
+// ============================================
+
+export default function GamePage() {
+  return (
+    <Suspense fallback={
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <p className="text-lg font-medium text-foreground">Loading Your Adventure...</p>
+        </div>
+      </div>
+    }>
+      <GamePageContent />
+    </Suspense>
   );
 }

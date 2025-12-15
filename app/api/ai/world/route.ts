@@ -87,13 +87,32 @@ export async function POST(request: Request) {
     );
     
     // Generate with AI Gateway
-    const { object: world, usage } = await generateObject({
-      model: gateway('openai/gpt-4o'),
-      schema: worldRecipeSchema,
-      system: COZY_WORLD_SYSTEM_PROMPT,
-      prompt,
-      temperature: 0.7,
-    });
+    let world, usage;
+    try {
+      const result = await generateObject({
+        model: gateway('openai/gpt-4o'),
+        schema: worldRecipeSchema,
+        system: COZY_WORLD_SYSTEM_PROMPT,
+        prompt,
+        temperature: 0.7,
+      });
+      world = result.object;
+      usage = result.usage;
+    } catch (schemaError: any) {
+      // If schema validation fails, log and use fallback
+      console.error('Schema validation failed:', schemaError);
+      if (process.env.NODE_ENV === 'development') {
+        const fallbackWorld = createFallbackWorld();
+        return NextResponse.json({
+          worldId: fallbackWorld.worldId,
+          world: fallbackWorld,
+          fallback: true,
+          error: 'Schema validation failed - using fallback world',
+          schemaErrors: schemaError.cause?.issues || [],
+        });
+      }
+      throw schemaError; // Re-throw in production
+    }
     
     // Set the worldId and seed
     world.worldId = worldId;
