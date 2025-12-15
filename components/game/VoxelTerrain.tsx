@@ -993,8 +993,8 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
         .map((path, i) => (
           <PathSegment 
             key={`path-${i}`} 
-            from={path.from} 
-            to={path.to}
+            from={normalizePosition(path.from)} 
+            to={normalizePosition(path.to)}
           />
         ))}
       
