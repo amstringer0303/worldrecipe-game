@@ -215,19 +215,41 @@ export function SingleNPCController({ npc, pois, onInteract }: NPCControllerProp
     return npc.schedule.find(s => s.timeOfDay === timeOfDay) || npc.schedule[0];
   }, [npc.schedule, timeOfDay]);
   
-  // Find POI position for current schedule
+  // Find POI position for current schedule with NPC-specific offset
   const targetPosition = useMemo(() => {
+    // Generate a consistent offset for this NPC based on their ID
+    const npcHash = npc.npcId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const offsetAngle = (npcHash % 8) * (Math.PI / 4); // 8 possible positions around POI
+    const offsetDistance = 1.5 + (npcHash % 3) * 0.5; // 1.5 to 2.5 units away
+    const offsetX = Math.cos(offsetAngle) * offsetDistance;
+    const offsetZ = Math.sin(offsetAngle) * offsetDistance;
+    
+    // Try to find the scheduled POI
     const poi = pois.find(p => p.poiId === currentSchedule?.locationId);
     if (poi && Number.isFinite(poi.position[0]) && Number.isFinite(poi.position[1])) {
-      return [poi.position[0], 0.5, poi.position[1]] as [number, number, number];
+      return [poi.position[0] + offsetX, 0.5, poi.position[1] + offsetZ] as [number, number, number];
     }
-    // Fallback to first POI
-    const fallbackPoi = pois[0];
-    if (fallbackPoi && Number.isFinite(fallbackPoi.position[0]) && Number.isFinite(fallbackPoi.position[1])) {
-      return [fallbackPoi.position[0], 0.5, fallbackPoi.position[1]] as [number, number, number];
+    
+    // Try to match by POI name or type if locationId doesn't match directly
+    const scheduleLocation = currentSchedule?.locationId || '';
+    const matchingPoi = pois.find(p => 
+      p.name.toLowerCase().includes(scheduleLocation.toLowerCase()) ||
+      p.type === scheduleLocation ||
+      scheduleLocation.includes(p.poiId)
+    );
+    if (matchingPoi && Number.isFinite(matchingPoi.position[0]) && Number.isFinite(matchingPoi.position[1])) {
+      return [matchingPoi.position[0] + offsetX, 0.5, matchingPoi.position[1] + offsetZ] as [number, number, number];
     }
-    return [0, 0.5, 0] as [number, number, number];
-  }, [currentSchedule, pois]);
+    
+    // Fallback: spread NPCs around the map based on their hash
+    const fallbackAngle = (npcHash % 12) * (Math.PI / 6);
+    const fallbackDistance = 8 + (npcHash % 10);
+    return [
+      Math.cos(fallbackAngle) * fallbackDistance, 
+      0.5, 
+      Math.sin(fallbackAngle) * fallbackDistance
+    ] as [number, number, number];
+  }, [npc.npcId, currentSchedule, pois]);
   
   // Stable key for position to force remount when position changes significantly
   const positionKey = useMemo(() => {

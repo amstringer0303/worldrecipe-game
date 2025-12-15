@@ -1,15 +1,18 @@
 'use client';
 
-import { useEffect, useState, Suspense, useCallback } from 'react';
+import { useEffect, useState, Suspense, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { HUD } from '@/components/ui/HUD';
 import { DialogueModal } from '@/components/ui/DialogueModal';
 import { JournalPanel } from '@/components/ui/JournalPanel';
 import { InventoryPanel } from '@/components/ui/InventoryPanel';
 import { CookingUI } from '@/components/ui/CookingUI';
+import { ToastContainer, AutosaveIndicator } from '@/components/ui/ToastNotifications';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useWorldStore } from '@/lib/store/worldStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
+import { useSaveStore } from '@/lib/store/saveStore';
+import { useNotificationStore } from '@/lib/store/notificationStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -166,6 +169,9 @@ function DishCompleteCeremony({ onClose }: { onClose: () => void }) {
 
 export default function GamePage() {
   const [showComplete, setShowComplete] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const hasInitialized = useRef(false);
+  
   const isPaused = useGameStore((s) => s.isPaused);
   const setPaused = useGameStore((s) => s.setPaused);
   const dialogueActive = useGameStore((s) => s.dialogueState.active);
@@ -174,40 +180,93 @@ export default function GamePage() {
   const isLoading = useWorldStore((s) => s.isLoading);
   const completedSteps = usePlayerStore((s) => s.completedCookingSteps);
   
-  // Load fallback world on mount if no world exists
+  const saveGame = useSaveStore((s) => s.saveGame);
+  const loadLatestSave = useSaveStore((s) => s.loadLatestSave);
+  const startAutoSave = useSaveStore((s) => s.startAutoSave);
+  const stopAutoSave = useSaveStore((s) => s.stopAutoSave);
+  const isSaving = useSaveStore((s) => s.isSaving);
+  
+  const showAutosave = useNotificationStore((s) => s.showAutosave);
+  const showInfo = useNotificationStore((s) => s.showInfo);
+  
+  // Initialize game: load world and restore save
   useEffect(() => {
-    if (!world && !isLoading) {
-      // Load the fallback world for demo
-      const loadWorld = async () => {
-        try {
-          const res = await fetch('/api/ai/world', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              dishPrompt: 'Simple Ramen',
-              seed: 'demo-seed',
-            }),
-          });
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+    
+    const initializeGame = async () => {
+      setIsInitializing(true);
+      
+      try {
+        // First, generate/load the world
+        const res = await fetch('/api/ai/world', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dishPrompt: 'Simple Ramen',
+            seed: 'demo-seed',
+          }),
+        });
+        
+        const data = await res.json();
+        
+        if (data.world) {
+          setWorld(data.world);
           
-          const data = await res.json();
+          // Try to load existing save for this world
+          const saveLoaded = await loadLatestSave(data.world.worldId);
           
-          if (data.world) {
-            setWorld(data.world);
-          } else if (data.error) {
-            console.error('World generation error:', data.error);
-            // Try to use any fallback world included in error response
-            if (data.fallbackWorld) {
-              setWorld(data.fallbackWorld);
-            }
+          if (saveLoaded) {
+            console.log('Restored from previous save');
+          } else {
+            console.log('Starting new game');
           }
-        } catch (error) {
-          console.error('Failed to load world:', error);
+        } else if (data.error) {
+          console.error('World generation error:', data.error);
+          if (data.fallbackWorld) {
+            setWorld(data.fallbackWorld);
+          }
         }
+      } catch (error) {
+        console.error('Failed to initialize game:', error);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    
+    initializeGame();
+  }, [setWorld, loadLatestSave]);
+  
+  // Start autosave when playing
+  useEffect(() => {
+    if (world && !isInitializing) {
+      // Custom autosave with notification
+      const autoSaveInterval = setInterval(async () => {
+        const gameState = useGameStore.getState();
+        if (gameState.isPlaying && !gameState.isPaused) {
+          const success = await saveGame();
+          if (success) {
+            showAutosave();
+          }
+        }
+      }, 60000); // Autosave every 60 seconds
+      
+      // Save before page unload
+      const handleBeforeUnload = () => {
+        saveGame();
       };
       
-      loadWorld();
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      
+      // Show welcome message
+      showInfo('Welcome back!', 'Your adventure continues...');
+      
+      return () => {
+        clearInterval(autoSaveInterval);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
     }
-  }, [world, setWorld, isLoading]);
+  }, [world, isInitializing, saveGame, showAutosave, showInfo]);
   
   // Handle escape key for pause and other shortcuts
   useEffect(() => {
@@ -252,13 +311,17 @@ export default function GamePage() {
     }
   }, [world, completedSteps]);
   
-  if (isLoading) {
+  if (isLoading || isInitializing) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          <p className="text-lg font-medium text-foreground">Generating World...</p>
-          <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
+          <p className="text-lg font-medium text-foreground">
+            {isInitializing ? 'Loading Your Adventure...' : 'Generating World...'}
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {isInitializing ? 'Restoring your progress' : 'This may take a moment'}
+          </p>
         </div>
       </div>
     );
@@ -276,6 +339,12 @@ export default function GamePage() {
       <JournalPanel />
       <InventoryPanel />
       <CookingUI />
+      
+      {/* Toast Notifications */}
+      <ToastContainer />
+      
+      {/* Autosave Indicator */}
+      <AutosaveIndicator />
       
       {/* Pause Menu */}
       {isPaused && !dialogueActive && <PauseMenu />}

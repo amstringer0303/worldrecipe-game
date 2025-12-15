@@ -459,10 +459,15 @@ function WorldContent() {
   const region = useWorldStore((s) => s.currentRegion);
   const startDialogue = useGameStore((s) => s.startDialogue);
   const addItem = usePlayerStore((s) => s.addItem);
+  const collectedItemIds = usePlayerStore((s) => s.collectedItemIds);
+  const checkAndUpdateTalkObjectives = usePlayerStore((s) => s.checkAndUpdateTalkObjectives);
   
   const handleNPCInteract = useCallback((npcId: string) => {
     const npc = world?.npcRoster.find((n) => n.npcId === npcId);
     if (!npc) return;
+    
+    // Check and update talk objectives
+    checkAndUpdateTalkObjectives(npcId);
     
     startDialogue(npcId, {
       nodeId: 'start',
@@ -470,7 +475,7 @@ function WorldContent() {
       text: '',
       choices: [],
     });
-  }, [world, startDialogue]);
+  }, [world, startDialogue, checkAndUpdateTalkObjectives]);
   
   const handleIngredientPickup = useCallback((ingredientId: string) => {
     const ingredient = world?.ingredientGraph.ingredients.find(
@@ -523,6 +528,9 @@ function WorldContent() {
         regionId={region.regionId}
         seed={world.seed}
         onIngredientPickup={handleIngredientPickup}
+        collectedItemIds={collectedItemIds}
+        mapWidth={mapWidth}
+        mapHeight={mapHeight}
       />
     </>
   );

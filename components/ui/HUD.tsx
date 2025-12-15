@@ -95,80 +95,226 @@ function RegionDisplay() {
 // ============================================
 // Enhanced Mini Map Component
 // ============================================
+
+// Seeded random for consistent spawn positions on minimap
+function seededRandom(seed: string) {
+  let hash = 0;
+  if (!seed || seed.length === 0) seed = 'default-seed';
+  for (let i = 0; i < seed.length; i++) {
+    const char = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  if (hash === 0) hash = 1;
+  return function() {
+    hash = Math.sin(hash) * 10000;
+    const result = hash - Math.floor(hash);
+    return Number.isFinite(result) ? result : 0.5;
+  };
+}
+
 function MiniMap() {
+  const [showLegend, setShowLegend] = useState(false);
   const position = usePlayerStore((s) => s.position);
   const rotation = usePlayerStore((s) => s.rotation);
+  const collectedItemIds = usePlayerStore((s) => s.collectedItemIds);
   const region = useWorldStore((s) => s.currentRegion);
+  const world = useWorldStore((s) => s.world);
+  const timeOfDay = useGameStore((s) => s.timeOfDay);
   
   const pois = region?.mapSpec.pois || [];
-  const mapSize = 50; // Assume 50x50 map
+  const npcs = world?.npcRoster || [];
+  const ingredients = world?.ingredientGraph.ingredients || [];
+  const mapWidth = region?.mapSpec?.grid?.width || 50;
+  const mapHeight = region?.mapSpec?.grid?.height || 50;
+  const mapSize = Math.max(mapWidth, mapHeight);
+  
+  // Calculate ingredient positions (same logic as Interactable)
+  const ingredientPositions = ingredients
+    .filter(i => 
+      i.regionId === region?.regionId &&
+      (i.gatherMethod === 'pickup' || i.gatherMethod === 'harvest') &&
+      !collectedItemIds.includes(i.ingredientId)
+    )
+    .map((ingredient, index) => {
+      const random = seededRandom((world?.seed || 'seed') + ingredient.ingredientId + index);
+      const angle = random() * Math.PI * 2;
+      const distance = 8 + random() * (mapSize / 2 - 10);
+      let x = Math.cos(angle) * distance;
+      let z = Math.sin(angle) * distance;
+      x = Math.max(-mapWidth / 2 + 3, Math.min(mapWidth / 2 - 3, x));
+      z = Math.max(-mapHeight / 2 + 3, Math.min(mapHeight / 2 - 3, z));
+      return { ingredient, x, z };
+    });
+  
+  // Get NPC positions based on schedule with offsets to prevent overlap
+  const npcPositions = npcs.map(npc => {
+    // Generate a consistent offset for this NPC based on their ID
+    const npcHash = npc.npcId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const offsetAngle = (npcHash % 8) * (Math.PI / 4);
+    const offsetDistance = 1.5 + (npcHash % 3) * 0.5;
+    const offsetX = Math.cos(offsetAngle) * offsetDistance;
+    const offsetZ = Math.sin(offsetAngle) * offsetDistance;
+    
+    const schedule = npc.schedule.find(s => s.timeOfDay === timeOfDay) || npc.schedule[0];
+    const scheduleLocation = schedule?.locationId || '';
+    
+    // Try direct POI match
+    let poi = pois.find(p => p.poiId === scheduleLocation);
+    
+    // Try fuzzy match if direct match fails
+    if (!poi) {
+      poi = pois.find(p => 
+        p.name.toLowerCase().includes(scheduleLocation.toLowerCase()) ||
+        p.type === scheduleLocation ||
+        scheduleLocation.includes(p.poiId)
+      );
+    }
+    
+    if (poi) {
+      return {
+        npc,
+        x: poi.position[0] + offsetX,
+        y: poi.position[1] + offsetZ,
+      };
+    }
+    
+    // Fallback: spread NPCs around based on hash
+    const fallbackAngle = (npcHash % 12) * (Math.PI / 6);
+    const fallbackDistance = 8 + (npcHash % 10);
+    return {
+      npc,
+      x: Math.cos(fallbackAngle) * fallbackDistance,
+      y: Math.sin(fallbackAngle) * fallbackDistance,
+    };
+  });
+  
+  const poiIcons: Record<string, string> = {
+    market: '🏪',
+    kitchen_hut: '🏠',
+    dock: '⚓',
+    shrine: '⛩️',
+    farm: '🌾',
+    npc_home: '🏡',
+    gathering_spot: '🌿',
+  };
+  
+  const poiColors: Record<string, string> = {
+    market: 'bg-yellow-400',
+    kitchen_hut: 'bg-red-400',
+    dock: 'bg-blue-400',
+    shrine: 'bg-pink-400',
+    farm: 'bg-green-400',
+    npc_home: 'bg-orange-400',
+    gathering_spot: 'bg-lime-400',
+  };
+  
+  const ingredientColors: Record<string, string> = {
+    vegetable: 'bg-green-400',
+    protein: 'bg-red-400',
+    grain: 'bg-amber-400',
+    spice: 'bg-orange-400',
+    liquid: 'bg-blue-400',
+  };
   
   return (
-    <Card className="hud-card w-36 h-36 bg-card/95 backdrop-blur-md border-primary/20 overflow-hidden shadow-xl">
+    <Card 
+      className="hud-card w-40 h-40 bg-card/95 backdrop-blur-md border-primary/20 overflow-hidden shadow-xl cursor-pointer"
+      onClick={() => setShowLegend(!showLegend)}
+    >
       <div className="relative w-full h-full">
         {/* Map background with gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/80 to-emerald-800/60" />
         
         {/* Grid lines */}
-        <div className="absolute inset-1 grid grid-cols-6 grid-rows-6">
-          {Array.from({ length: 36 }).map((_, i) => (
-            <div key={i} className="border border-emerald-600/20" />
+        <div className="absolute inset-1 grid grid-cols-8 grid-rows-8">
+          {Array.from({ length: 64 }).map((_, i) => (
+            <div key={i} className="border border-emerald-600/15" />
           ))}
         </div>
         
-        {/* POI indicators */}
-        {pois.slice(0, 8).map((poi, i) => {
-          const x = 50 + (poi.position[0] / mapSize) * 40;
-          const y = 50 + (poi.position[1] / mapSize) * 40;
+        {/* Ingredient indicators (small dots) */}
+        {ingredientPositions.map(({ ingredient, x, z }) => {
+          const mapX = 50 + (x / mapSize) * 80;
+          const mapY = 50 + (z / mapSize) * 80;
           
-          const poiColors: Record<string, string> = {
-            market: 'bg-yellow-400',
-            kitchen_hut: 'bg-red-400',
-            dock: 'bg-blue-400',
-            shrine: 'bg-pink-400',
-            farm: 'bg-green-400',
-          };
+          return (
+            <div
+              key={ingredient.ingredientId}
+              className={`absolute w-1.5 h-1.5 ${ingredientColors[ingredient.category] || 'bg-purple-400'} rounded-full transform -translate-x-1/2 -translate-y-1/2 opacity-70 animate-pulse`}
+              style={{
+                left: `${Math.max(5, Math.min(95, mapX))}%`,
+                top: `${Math.max(5, Math.min(95, mapY))}%`,
+              }}
+              title={ingredient.name}
+            />
+          );
+        })}
+        
+        {/* POI indicators */}
+        {pois.map((poi) => {
+          const x = 50 + (poi.position[0] / mapSize) * 80;
+          const y = 50 + (poi.position[1] / mapSize) * 80;
           
           return (
             <div
               key={poi.poiId}
-              className={`absolute w-2 h-2 ${poiColors[poi.type] || 'bg-purple-400'} rounded-full transform -translate-x-1/2 -translate-y-1/2 opacity-80`}
+              className={`absolute w-2.5 h-2.5 ${poiColors[poi.type] || 'bg-purple-400'} rounded-sm transform -translate-x-1/2 -translate-y-1/2 opacity-90 border border-white/30`}
               style={{
-                left: `${Math.max(10, Math.min(90, x))}%`,
-                top: `${Math.max(10, Math.min(90, y))}%`,
+                left: `${Math.max(8, Math.min(92, x))}%`,
+                top: `${Math.max(8, Math.min(92, y))}%`,
               }}
+              title={poi.name}
+            />
+          );
+        })}
+        
+        {/* NPC indicators */}
+        {npcPositions.map(({ npc, x, y }) => {
+          const mapX = 50 + (x / mapSize) * 80;
+          const mapY = 50 + (y / mapSize) * 80;
+          
+          return (
+            <div
+              key={npc.npcId}
+              className="absolute w-2 h-2 bg-fuchsia-400 rounded-full transform -translate-x-1/2 -translate-y-1/2 border border-white/50 shadow-sm"
+              style={{
+                left: `${Math.max(8, Math.min(92, mapX))}%`,
+                top: `${Math.max(8, Math.min(92, mapY))}%`,
+              }}
+              title={npc.name}
             />
           );
         })}
         
         {/* Player indicator with direction */}
         <div
-          className="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-100"
+          className="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-100 z-10"
           style={{
-            left: `${50 + (position[0] / mapSize) * 40}%`,
-            top: `${50 + (position[2] / mapSize) * 40}%`,
+            left: `${50 + (position[0] / mapSize) * 80}%`,
+            top: `${50 + (position[2] / mapSize) * 80}%`,
           }}
         >
           {/* Direction indicator */}
           <div 
-            className="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[8px] border-l-transparent border-r-transparent border-b-cyan-400 absolute -top-2 left-1/2 -translate-x-1/2 drop-shadow-glow"
+            className="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[10px] border-l-transparent border-r-transparent border-b-cyan-400 absolute -top-2 left-1/2 drop-shadow-glow"
             style={{ transform: `translateX(-50%) rotate(${-rotation}rad)` }}
           />
           {/* Player dot */}
-          <div className="w-3 h-3 bg-cyan-400 rounded-full shadow-glow-cyan animate-pulse-slow" />
+          <div className="w-3.5 h-3.5 bg-cyan-400 rounded-full shadow-glow-cyan border-2 border-white" />
         </div>
         
         {/* Compass */}
-        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-cyan-300 drop-shadow">
+        <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[9px] font-bold text-cyan-300 drop-shadow">
           N
         </div>
-        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-cyan-300/50">
+        <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[7px] text-cyan-300/50">
           S
         </div>
-        <div className="absolute left-1 top-1/2 -translate-y-1/2 text-[8px] text-cyan-300/50">
+        <div className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[7px] text-cyan-300/50">
           W
         </div>
-        <div className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] text-cyan-300/50">
+        <div className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[7px] text-cyan-300/50">
           E
         </div>
         
@@ -178,6 +324,30 @@ function MiniMap() {
         <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
         <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
         <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
+        
+        {/* Legend overlay */}
+        {showLegend && (
+          <div className="absolute inset-0 bg-black/80 p-2 text-[8px] space-y-1 animate-in fade-in duration-150">
+            <div className="font-bold text-white text-[9px] mb-1">Legend</div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-cyan-400 rounded-full" />
+              <span className="text-white/80">You</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-fuchsia-400 rounded-full" />
+              <span className="text-white/80">NPCs</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-yellow-400 rounded-sm" />
+              <span className="text-white/80">POIs</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-green-400 rounded-full" />
+              <span className="text-white/80">Ingredients</span>
+            </div>
+            <div className="text-white/50 mt-1">Click to close</div>
+          </div>
+        )}
       </div>
     </Card>
   );

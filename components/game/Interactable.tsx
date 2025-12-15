@@ -81,6 +81,8 @@ export function IngredientPickup({ ingredient, position, onPickup }: IngredientP
         setIsCollected(true);
         hideInteractionPrompt();
         onPickup(ingredient.ingredientId);
+        // Mark as collected in player store to prevent respawn after reload
+        usePlayerStore.getState().markCollected(ingredient.ingredientId);
       }
     };
     
@@ -264,6 +266,9 @@ interface InteractableManagerProps {
   regionId: string;
   seed: string;
   onIngredientPickup: (ingredientId: string) => void;
+  collectedItemIds?: string[];
+  mapWidth?: number;
+  mapHeight?: number;
 }
 
 // Seeded random for consistent spawns
@@ -292,30 +297,84 @@ function seededRandom(seed: string) {
   };
 }
 
-export function InteractableManager({ 
-  ingredients, 
-  regionId, 
-  seed, 
-  onIngredientPickup 
-}: InteractableManagerProps) {
-  // Filter ingredients for this region
-  const regionIngredients = ingredients.filter(i => i.regionId === regionId);
+// Get spawn positions for ingredients based on their gather method
+function getIngredientSpawnPositions(
+  ingredients: IngredientNode[],
+  regionId: string,
+  seed: string,
+  collectedItemIds: string[] = [],
+  mapWidth: number = 40,
+  mapHeight: number = 40
+) {
+  // Filter ingredients for this region that can be picked up
+  const spawnableIngredients = ingredients.filter(i => 
+    i.regionId === regionId &&
+    (i.gatherMethod === 'pickup' || i.gatherMethod === 'harvest') &&
+    !collectedItemIds.includes(i.ingredientId)
+  );
   
   // Generate spawn positions with validation
-  const spawnPositions = regionIngredients.map((ingredient) => {
-    const random = seededRandom(seed + ingredient.ingredientId);
-    let x = (random() - 0.5) * 30;
-    let z = (random() - 0.5) * 30;
+  return spawnableIngredients.map((ingredient, index) => {
+    const random = seededRandom(seed + ingredient.ingredientId + index);
+    
+    // Spread ingredients across the map, avoiding center (player spawn)
+    const angle = random() * Math.PI * 2;
+    const distance = 8 + random() * (Math.min(mapWidth, mapHeight) / 2 - 10);
+    
+    let x = Math.cos(angle) * distance;
+    let z = Math.sin(angle) * distance;
+    
+    // Keep within bounds
+    x = Math.max(-mapWidth / 2 + 3, Math.min(mapWidth / 2 - 3, x));
+    z = Math.max(-mapHeight / 2 + 3, Math.min(mapHeight / 2 - 3, z));
     
     // Ensure valid numbers
-    if (!Number.isFinite(x)) x = 0;
-    if (!Number.isFinite(z)) z = 0;
+    if (!Number.isFinite(x)) x = 5;
+    if (!Number.isFinite(z)) z = 5;
     
     return {
       ingredient,
       position: [x, 0, z] as [number, number, number],
     };
   });
+}
+
+// Export spawn positions for mini-map use
+export function useIngredientSpawnPositions(
+  ingredients: IngredientNode[],
+  regionId: string,
+  seed: string,
+  collectedItemIds: string[] = [],
+  mapWidth?: number,
+  mapHeight?: number
+) {
+  return getIngredientSpawnPositions(
+    ingredients, 
+    regionId, 
+    seed, 
+    collectedItemIds, 
+    mapWidth, 
+    mapHeight
+  );
+}
+
+export function InteractableManager({ 
+  ingredients, 
+  regionId, 
+  seed, 
+  onIngredientPickup,
+  collectedItemIds = [],
+  mapWidth = 40,
+  mapHeight = 40,
+}: InteractableManagerProps) {
+  const spawnPositions = getIngredientSpawnPositions(
+    ingredients,
+    regionId,
+    seed,
+    collectedItemIds,
+    mapWidth,
+    mapHeight
+  );
   
   // Don't render if no valid positions
   if (spawnPositions.length === 0) return null;

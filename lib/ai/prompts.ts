@@ -169,31 +169,106 @@ Make the world feel like a vacation you'd want to take - full of discovery, frie
   return parts.join('\n\n');
 }
 
+export interface EnhancedDialogueContext {
+  relationshipLevel: number;
+  activeQuests: string[];
+  currentTimeOfDay: string;
+  // Enhanced context
+  availableQuests?: { questId: string; title: string; description: string }[];
+  activeQuestsWithThisNPC?: { questId: string; title: string; objectives: { description: string; completed: boolean }[] }[];
+  playerInventory?: { name: string; quantity: number }[];
+  tradeableIngredients?: string[];
+  conversationHistory?: string[];
+  playerName?: string;
+}
+
 export function buildDialoguePrompt(
-  npc: { name: string; personality: { archetype: string; speakingStyle: string; traits: string[] }; role: { job: string } },
-  context: {
-    relationshipLevel: number;
-    activeQuests: string[];
-    lastTalkSummary?: string;
-    currentTimeOfDay: string;
-  }
+  npc: { 
+    name: string; 
+    personality: { archetype: string; speakingStyle: string; traits: string[]; likes?: string[]; dislikes?: string[] }; 
+    role: { job: string; services?: string[] } 
+  },
+  context: EnhancedDialogueContext
 ): string {
-  return `Generate dialogue for ${npc.name}, a ${npc.role.job} with ${npc.personality.archetype} archetype.
+  const parts: string[] = [];
+  
+  parts.push(`Generate dialogue for ${npc.name}, a ${npc.role.job} with ${npc.personality.archetype} archetype.`);
+  parts.push(`Speaking style: ${npc.personality.speakingStyle}`);
+  parts.push(`Traits: ${npc.personality.traits.join(', ')}`);
+  
+  if (npc.personality.likes?.length) {
+    parts.push(`Likes: ${npc.personality.likes.join(', ')}`);
+  }
+  
+  parts.push(`\n## Player Context:`);
+  parts.push(`- Relationship level: ${context.relationshipLevel}/10 (${getRelationshipDescription(context.relationshipLevel)})`);
+  parts.push(`- Time of day: ${context.currentTimeOfDay}`);
+  parts.push(`- Player name: ${context.playerName || 'Chef'}`);
+  
+  // Conversation history for memory
+  if (context.conversationHistory && context.conversationHistory.length > 0) {
+    parts.push(`\n## Previous Conversations:`);
+    context.conversationHistory.slice(-3).forEach((summary, i) => {
+      parts.push(`${i + 1}. ${summary}`);
+    });
+  } else {
+    parts.push(`\n(This is your first meeting with the player!)`);
+  }
+  
+  // Available quests this NPC can offer
+  if (context.availableQuests && context.availableQuests.length > 0) {
+    parts.push(`\n## Quests Available to Offer:`);
+    context.availableQuests.forEach(q => {
+      parts.push(`- "${q.title}": ${q.description}`);
+    });
+    parts.push(`(Include a dialogue choice to accept a quest if relationship >= 1)`);
+  }
+  
+  // Active quests with this NPC
+  if (context.activeQuestsWithThisNPC && context.activeQuestsWithThisNPC.length > 0) {
+    parts.push(`\n## Active Quests with Player:`);
+    context.activeQuestsWithThisNPC.forEach(q => {
+      const progress = q.objectives.filter(o => o.completed).length;
+      const total = q.objectives.length;
+      parts.push(`- "${q.title}" (${progress}/${total} complete)`);
+      q.objectives.filter(o => !o.completed).forEach(obj => {
+        parts.push(`  • Needs: ${obj.description}`);
+      });
+    });
+  }
+  
+  // Trading availability
+  if (context.tradeableIngredients && context.tradeableIngredients.length > 0) {
+    parts.push(`\n## Can Trade These Items:`);
+    parts.push(context.tradeableIngredients.join(', '));
+    parts.push(`(Include a trade option in dialogue choices)`);
+  }
+  
+  // What player is carrying
+  if (context.playerInventory && context.playerInventory.length > 0) {
+    parts.push(`\n## Player is Carrying:`);
+    const items = context.playerInventory.slice(0, 5).map(i => `${i.name} (x${i.quantity})`);
+    parts.push(items.join(', '));
+  }
+  
+  parts.push(`\n## Instructions:`);
+  parts.push(`Generate a natural dialogue that:`);
+  parts.push(`1. Reflects ${npc.name}'s personality and current relationship with player`);
+  parts.push(`2. References any quest progress or available quests naturally`);
+  parts.push(`3. Feels warm, memorable, and advances gameplay`);
+  parts.push(`4. Includes 2-4 meaningful player response choices with effects`);
+  parts.push(`\nChoice effects should include: quest_accept (with questId), trade, relationship (+1), hint, farewell`);
+  
+  return parts.join('\n');
+}
 
-Speaking style: ${npc.personality.speakingStyle}
-Traits: ${npc.personality.traits.join(', ')}
-
-Context:
-- Relationship level: ${context.relationshipLevel}/10
-- Active quests: ${context.activeQuests.length > 0 ? context.activeQuests.join(', ') : 'None'}
-- Time of day: ${context.currentTimeOfDay}
-${context.lastTalkSummary ? `- Last conversation: ${context.lastTalkSummary}` : '- First meeting!'}
-
-Generate a natural dialogue exchange that:
-1. Reflects their personality and relationship
-2. ${context.activeQuests.length > 0 ? 'Mentions quest progress' : 'Could offer a new quest'}
-3. Feels warm and memorable
-4. Includes 2-3 player response choices`;
+function getRelationshipDescription(level: number): string {
+  if (level <= 0) return 'stranger';
+  if (level <= 2) return 'acquaintance';
+  if (level <= 4) return 'friendly';
+  if (level <= 6) return 'good friend';
+  if (level <= 8) return 'close friend';
+  return 'best friend';
 }
 
 export function buildQuestResolutionPrompt(

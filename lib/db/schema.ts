@@ -41,6 +41,13 @@ export const saves = sqliteTable('saves', {
   activeQuestsJson: text('active_quests_json').notNull().default('[]'),
   npcRelationshipsJson: text('npc_relationships_json').notNull().default('{}'),
   completedCookingStepsJson: text('completed_cooking_steps_json').notNull().default('[]'),
+  collectedItemIdsJson: text('collected_item_ids_json').notNull().default('[]'),
+  npcConversationMemoryJson: text('npc_conversation_memory_json').notNull().default('{}'),
+  
+  // Player stats
+  stamina: integer('stamina').notNull().default(100),
+  playerRotation: integer('player_rotation').notNull().default(0),
+  gameTimeSeconds: integer('game_time_seconds').notNull().default(0),
   
   // Timestamps
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),

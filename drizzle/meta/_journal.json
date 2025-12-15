@@ -8,6 +8,13 @@
       "when": 1765703791383,
       "tag": "0000_last_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1765752523835,
+      "tag": "0001_add_save_fields",
+      "breakpoints": true
     }
   ]
 }

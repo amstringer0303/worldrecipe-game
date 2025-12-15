@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { ItemStack, Item, QuestChapter, QuestObjective } from '@/types/game';
+import { useNotificationStore } from './notificationStore';
 
 // ============================================
 // Player Store - Player-specific state
@@ -28,6 +29,12 @@ interface PlayerState {
   completedCookingSteps: string[];
   unlockedTechniques: string[];
   
+  // Collected items (to prevent respawn)
+  collectedItemIds: string[];
+  
+  // NPC conversation memory
+  npcConversationMemory: Record<string, string[]>;
+  
   // Stats
   stamina: number;
   maxStamina: number;
@@ -49,6 +56,8 @@ interface PlayerState {
   updateObjective: (questId: string, objectiveId: string) => void;
   completeQuest: (questId: string) => void;
   getActiveQuest: (questId: string) => QuestChapter | undefined;
+  checkAndUpdateGatherObjectives: (itemId: string) => void;
+  checkAndUpdateTalkObjectives: (npcId: string) => void;
   
   // Relationship actions
   updateRelationship: (npcId: string, delta: number) => void;
@@ -62,6 +71,17 @@ interface PlayerState {
   // Stamina actions
   useStamina: (amount: number) => boolean;
   restoreStamina: (amount: number) => void;
+  
+  // Collected items actions
+  markCollected: (itemId: string) => void;
+  isCollected: (itemId: string) => boolean;
+  
+  // NPC memory actions
+  addConversationMemory: (npcId: string, summary: string) => void;
+  getConversationMemory: (npcId: string) => string[];
+  
+  // Restore state (for save/load)
+  restoreState: (state: Partial<PlayerState>) => void;
   
   // Reset
   reset: () => void;
@@ -83,6 +103,12 @@ const initialState = {
   
   completedCookingSteps: [] as string[],
   unlockedTechniques: [] as string[],
+  
+  // Collected items tracking (to prevent respawn)
+  collectedItemIds: [] as string[],
+  
+  // NPC conversation memory (summaries for continuity)
+  npcConversationMemory: {} as Record<string, string[]>,
   
   stamina: 100,
   maxStamina: 100,
@@ -110,6 +136,10 @@ export const usePlayerStore = create<PlayerState>()(
               : stack
           ),
         });
+        // Show notification
+        useNotificationStore.getState().showItemCollected(item.name, quantity);
+        // Auto-check gather objectives after adding
+        setTimeout(() => get().checkAndUpdateGatherObjectives(item.itemId), 0);
         return true;
       }
       
@@ -118,6 +148,10 @@ export const usePlayerStore = create<PlayerState>()(
         set({
           inventory: [...inventory, { item, quantity }],
         });
+        // Show notification
+        useNotificationStore.getState().showItemCollected(item.name, quantity);
+        // Auto-check gather objectives after adding
+        setTimeout(() => get().checkAndUpdateGatherObjectives(item.itemId), 0);
         return true;
       }
       
@@ -169,6 +203,9 @@ export const usePlayerStore = create<PlayerState>()(
       set({
         activeQuests: [...activeQuests, quest],
       });
+      
+      // Show notification
+      useNotificationStore.getState().showQuestAccepted(quest.title);
     },
     
     updateObjective: (questId, objectiveId) => {
@@ -210,6 +247,9 @@ export const usePlayerStore = create<PlayerState>()(
         completedQuestIds: [...completedQuestIds, questId],
         inventory: newInventory,
       });
+      
+      // Show notification
+      useNotificationStore.getState().showQuestCompleted(quest.title);
     },
     
     getActiveQuest: (questId) => {
@@ -217,12 +257,20 @@ export const usePlayerStore = create<PlayerState>()(
     },
     
     updateRelationship: (npcId, delta) => {
+      const currentLevel = get().npcRelationships[npcId] ?? 0;
+      const newLevel = Math.max(0, Math.min(10, currentLevel + delta));
+      
       set((state) => ({
         npcRelationships: {
           ...state.npcRelationships,
-          [npcId]: Math.max(0, Math.min(10, (state.npcRelationships[npcId] ?? 0) + delta)),
+          [npcId]: newLevel,
         },
       }));
+      
+      // Show notification for positive relationship changes
+      if (delta > 0 && newLevel > currentLevel) {
+        useNotificationStore.getState().showRelationshipUp(npcId);
+      }
     },
     
     getRelationship: (npcId) => {
@@ -261,6 +309,111 @@ export const usePlayerStore = create<PlayerState>()(
     restoreStamina: (amount) => {
       const { stamina, maxStamina } = get();
       set({ stamina: Math.min(maxStamina, stamina + amount) });
+    },
+    
+    // Check and auto-update gather objectives when items are collected
+    checkAndUpdateGatherObjectives: (itemId) => {
+      const { activeQuests, inventory } = get();
+      const itemCount = inventory.find(s => s.item.itemId === itemId)?.quantity || 0;
+      
+      let updated = false;
+      const completedObjectives: string[] = [];
+      
+      const updatedQuests = activeQuests.map(quest => {
+        const updatedObjectives = quest.objectives.map(obj => {
+          if (
+            obj.type === 'gather' &&
+            obj.target === itemId &&
+            !obj.completed &&
+            itemCount >= (obj.quantity || 1)
+          ) {
+            updated = true;
+            completedObjectives.push(obj.description);
+            return { ...obj, completed: true };
+          }
+          return obj;
+        });
+        return { ...quest, objectives: updatedObjectives };
+      });
+      
+      if (updated) {
+        set({ activeQuests: updatedQuests });
+        // Show notification for completed objectives
+        completedObjectives.forEach(desc => {
+          useNotificationStore.getState().showObjectiveCompleted(desc);
+        });
+      }
+    },
+    
+    // Check and auto-update talk objectives when talking to NPCs
+    checkAndUpdateTalkObjectives: (npcId) => {
+      const { activeQuests } = get();
+      
+      let updated = false;
+      const updatedQuests = activeQuests.map(quest => {
+        const updatedObjectives = quest.objectives.map(obj => {
+          if (
+            obj.type === 'talk' &&
+            obj.target === npcId &&
+            !obj.completed
+          ) {
+            updated = true;
+            return { ...obj, completed: true };
+          }
+          return obj;
+        });
+        return { ...quest, objectives: updatedObjectives };
+      });
+      
+      if (updated) {
+        set({ activeQuests: updatedQuests });
+      }
+    },
+    
+    // Mark an item as collected (to prevent respawn)
+    markCollected: (itemId) => {
+      const { collectedItemIds } = get();
+      if (!collectedItemIds.includes(itemId)) {
+        set({ collectedItemIds: [...collectedItemIds, itemId] });
+      }
+    },
+    
+    isCollected: (itemId) => {
+      return get().collectedItemIds.includes(itemId);
+    },
+    
+    // NPC conversation memory
+    addConversationMemory: (npcId, summary) => {
+      const { npcConversationMemory } = get();
+      const existing = npcConversationMemory[npcId] || [];
+      // Keep last 5 conversation summaries
+      const updated = [...existing, summary].slice(-5);
+      set({
+        npcConversationMemory: {
+          ...npcConversationMemory,
+          [npcId]: updated,
+        },
+      });
+    },
+    
+    getConversationMemory: (npcId) => {
+      return get().npcConversationMemory[npcId] || [];
+    },
+    
+    // Restore state from save
+    restoreState: (state) => {
+      set({
+        ...state,
+        // Ensure arrays are initialized
+        inventory: state.inventory || [],
+        activeQuests: state.activeQuests || [],
+        completedQuestIds: state.completedQuestIds || [],
+        completedCookingSteps: state.completedCookingSteps || [],
+        unlockedTechniques: state.unlockedTechniques || [],
+        collectedItemIds: state.collectedItemIds || [],
+        npcConversationMemory: state.npcConversationMemory || {},
+        npcRelationships: state.npcRelationships || {},
+      });
     },
     
     reset: () => set(initialState),
