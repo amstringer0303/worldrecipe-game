@@ -223,12 +223,15 @@ function validateWorldRecipe(world: any): string[] {
     }
   }
   
-  // Check NPC schedules reference valid POIs
+  // Check NPC schedules reference valid POIs (POIs can be at region or mapSpec level)
   for (const npc of world.npcRoster) {
     for (const schedule of npc.schedule) {
-      const validPoi = world.regions.some((r: any) =>
-        r.mapSpec.pois.some((p: any) => p.poiId === schedule.locationId)
-      );
+      const validPoi = world.regions.some((r: any) => {
+        const regionPois = r.pois || [];
+        const mapSpecPois = r.mapSpec?.pois || [];
+        const allPois = [...regionPois, ...mapSpecPois];
+        return allPois.some((p: any) => p.poiId === schedule.locationId);
+      });
       if (!validPoi) {
         errors.push(`NPC ${npc.npcId} schedule references invalid POI: ${schedule.locationId}`);
       }
@@ -299,23 +302,23 @@ function createFallbackWorld() {
         mapSpec: {
           grid: { width: 40, height: 40, cellSize: 1 },
           terrain: {
-            waterBodies: [{ position: [35, 20] as [number, number], size: [10, 15] as [number, number] }],
-            elevationHints: [{ position: [5, 5] as [number, number], height: 2 }],
+            waterBodies: [{ position: { x: 35, y: 20 }, size: { width: 10, height: 15 } }],
+            elevationHints: [{ position: { x: 5, y: 5 }, height: 2 }],
             paths: [
-              { from: [20, 20] as [number, number], to: [30, 20] as [number, number] },
-              { from: [20, 20] as [number, number], to: [10, 15] as [number, number] },
+              { from: { x: 20, y: 20 }, to: { x: 30, y: 20 } },
+              { from: { x: 20, y: 20 }, to: { x: 10, y: 15 } },
             ],
           },
           pois: [
-            { poiId: 'poi_market', type: 'market' as const, name: 'Harbor Market', position: [10, 15] as [number, number], interactRadius: 3 },
-            { poiId: 'poi_dock', type: 'dock' as const, name: 'Fish Dock', position: [30, 20] as [number, number], interactRadius: 3 },
-            { poiId: 'poi_kitchen', type: 'kitchen_hut' as const, name: 'Seaside Kitchen', position: [20, 25] as [number, number], interactRadius: 3 },
+            { poiId: 'poi_market', type: 'market' as const, name: 'Harbor Market', position: { x: 10, y: 15 }, interactRadius: 3 },
+            { poiId: 'poi_dock', type: 'dock' as const, name: 'Fish Dock', position: { x: 30, y: 20 }, interactRadius: 3 },
+            { poiId: 'poi_kitchen', type: 'kitchen_hut' as const, name: 'Seaside Kitchen', position: { x: 20, y: 25 }, interactRadius: 3 },
           ],
           spawnPoints: {
-            player: [20, 20] as [number, number],
+            player: { x: 20, y: 20 },
             npcSpawns: [
-              { npcId: 'npc_chef_hana', position: [20, 25] as [number, number] },
-              { npcId: 'npc_fisher_kai', position: [30, 20] as [number, number] },
+              { npcId: 'npc_chef_hana', position: { x: 20, y: 25 } },
+              { npcId: 'npc_fisher_kai', position: { x: 30, y: 20 } },
             ],
           },
           decorRules: { density: 0.3, propThemes: ['coastal', 'fishing'] },
@@ -327,8 +330,14 @@ function createFallbackWorld() {
         { ingredientId: 'ing_noodles', name: 'Fresh Noodles', category: 'grain', regionId: 'region_harbor', gatherMethod: 'trade' as const },
         { ingredientId: 'ing_pork', name: 'Chashu Pork', category: 'protein', regionId: 'region_harbor', gatherMethod: 'trade' as const },
         { ingredientId: 'ing_egg', name: 'Soft-Boiled Egg', category: 'protein', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
+        { ingredientId: 'ing_egg_2', name: 'Farm Egg', category: 'protein', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
         { ingredientId: 'ing_seaweed', name: 'Nori Seaweed', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+        { ingredientId: 'ing_seaweed_2', name: 'Dried Seaweed', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
         { ingredientId: 'ing_scallion', name: 'Fresh Scallions', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+        { ingredientId: 'ing_garlic', name: 'Wild Garlic', category: 'spice', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
+        { ingredientId: 'ing_ginger', name: 'Fresh Ginger', category: 'spice', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
+        { ingredientId: 'ing_mushroom', name: 'Shiitake Mushroom', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'pickup' as const },
+        { ingredientId: 'ing_bamboo', name: 'Bamboo Shoot', category: 'vegetable', regionId: 'region_harbor', gatherMethod: 'harvest' as const },
         { ingredientId: 'ing_broth', name: 'Pork Bone Broth', category: 'liquid', regionId: 'region_harbor', gatherMethod: 'craft' as const },
       ],
       dependencies: [

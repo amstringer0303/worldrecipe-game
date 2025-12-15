@@ -144,10 +144,10 @@ export default function MainMenu() {
   
   const handleStartGame = () => {
     setIsLoading(true);
-    // In production, this would generate a world first
-    setTimeout(() => {
-      router.push('/game');
-    }, 500);
+    // Pass the selected dish to the game page
+    const dishName = featuredDishes.find(d => d.id === selectedDish)?.name || 'Simple Ramen';
+    const difficulty = featuredDishes.find(d => d.id === selectedDish)?.difficulty || 'medium';
+    router.push(`/game?dish=${encodeURIComponent(dishName)}&difficulty=${difficulty}`);
   };
   
   return (

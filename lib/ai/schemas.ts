@@ -40,7 +40,7 @@ export const ingredientNodeSchema = z.object({
   name: z.string().describe('Name of the ingredient'),
   category: z.string().describe('Category like vegetable, protein, spice'),
   regionId: z.string().describe('Which region this ingredient is found in'),
-  gatherMethod: z.enum(['pickup', 'harvest', 'fish', 'trade', 'craft']),
+  gatherMethod: z.enum(['pickup', 'harvest', 'fish', 'trade', 'craft', 'gather', 'forage']),
 });
 
 export const dependencyEdgeSchema = z.object({
@@ -50,8 +50,8 @@ export const dependencyEdgeSchema = z.object({
 });
 
 export const ingredientGraphSchema = z.object({
-  ingredients: z.array(ingredientNodeSchema).min(6).max(20),
-  dependencies: z.array(dependencyEdgeSchema),
+  ingredients: z.array(ingredientNodeSchema).min(3).max(30),
+  dependencies: z.array(dependencyEdgeSchema).default([]),
 });
 
 // ============================================
@@ -87,14 +87,14 @@ export const npcSchema = z.object({
     job: z.string().describe('Their profession'),
     services: z.array(z.string()).describe('What services they offer'),
   }),
-  schedule: z.array(scheduleEntrySchema).min(2).max(4),
+  schedule: z.array(scheduleEntrySchema).min(1).max(6),
   relationship: z.object({
-    startingLevel: z.number().int().min(0).max(3),
-    maxLevel: z.number().int().min(5).max(10),
+    startingLevel: z.number().int().min(0).max(5).default(1),
+    maxLevel: z.number().int().min(3).max(10).default(5),
     levelRewards: z.array(z.string()).describe('What unlocks at each level'),
   }),
-  questHooks: z.array(z.string()).describe('Quest arc IDs this NPC is involved in'),
-  visual: npcVisualSchema,
+  questHooks: z.array(z.string()).default([]).describe('Quest arc IDs this NPC is involved in'),
+  visual: npcVisualSchema.optional(),
 });
 
 // ============================================
@@ -147,8 +147,8 @@ export const questChapterSchema = z.object({
   description: z.string().describe('Quest description'),
   giverNpcId: z.string().describe('NPC who gives this quest'),
   objectives: z.array(questObjectiveSchema).min(1).max(5),
-  rewards: z.array(itemStackSchema),
-  nextQuestId: z.string().optional().describe('Next quest in chain'),
+  rewards: z.array(itemStackSchema).default([]),
+  nextQuestId: z.string().nullish().describe('Next quest in chain'),
 });
 
 export const questArcSchema = z.object({
@@ -194,46 +194,57 @@ export const poiTypeSchema = z.enum([
   'market', 'dock', 'shrine', 'farm', 'kitchen_hut', 'npc_home', 'gathering_spot'
 ]);
 
+// Position as object instead of tuple (OpenAI structured outputs don't support tuples)
+export const positionSchema = z.object({
+  x: z.number().describe('X coordinate'),
+  y: z.number().describe('Y coordinate'),
+});
+
 export const poiSchema = z.object({
   poiId: z.string(),
   type: poiTypeSchema,
   name: z.string().describe('Name of the location'),
-  position: z.tuple([z.number(), z.number()]).describe('Grid position [x, y]'),
+  position: positionSchema.describe('Grid position'),
   interactRadius: z.number().positive().default(2),
+});
+
+export const sizeSchema = z.object({
+  width: z.number().describe('Width'),
+  height: z.number().describe('Height'),
 });
 
 export const mapSpecSchema = z.object({
   grid: z.object({
-    width: z.number().int().min(20).max(100),
-    height: z.number().int().min(20).max(100),
+    width: z.number().int().min(10).max(100).default(40),
+    height: z.number().int().min(10).max(100).default(40),
     cellSize: z.number().positive().default(1),
   }),
   terrain: z.object({
     waterBodies: z.array(z.object({
-      position: z.tuple([z.number(), z.number()]),
-      size: z.tuple([z.number(), z.number()]),
-    })),
+      position: positionSchema,
+      size: sizeSchema,
+    })).default([]),
     elevationHints: z.array(z.object({
-      position: z.tuple([z.number(), z.number()]),
+      position: positionSchema,
       height: z.number(),
-    })),
+    })).default([]),
     paths: z.array(z.object({
-      from: z.tuple([z.number(), z.number()]),
-      to: z.tuple([z.number(), z.number()]),
-    })),
+      from: positionSchema,
+      to: positionSchema,
+    })).default([]),
   }),
-  pois: z.array(poiSchema).min(3).max(15),
+  pois: z.array(poiSchema).min(1).max(15).optional(),
   spawnPoints: z.object({
-    player: z.tuple([z.number(), z.number()]),
+    player: positionSchema,
     npcSpawns: z.array(z.object({
       npcId: z.string(),
-      position: z.tuple([z.number(), z.number()]),
+      position: positionSchema,
     })),
-  }),
+  }).optional(),
   decorRules: z.object({
     density: z.number().min(0).max(1).describe('0-1 density of decorations'),
     propThemes: z.array(z.string()).describe('Themes like forest, coastal, urban'),
-  }),
+  }).optional(),
 });
 
 export const paletteSchema = z.object({
@@ -257,9 +268,22 @@ export const regionSpecSchema = z.object({
   regionId: z.string(),
   name: z.string().describe('Region name'),
   inspiration: regionInspirationSchema,
-  biomes: z.array(z.string()).min(1).max(3).describe('Biome types'),
+  biomes: z.array(z.string()).min(1).max(5).describe('Biome types'),
   palette: paletteSchema,
   mapSpec: mapSpecSchema,
+  // Allow POIs at region level too (AI sometimes generates them here)
+  pois: z.array(poiSchema).optional(),
+  spawnPoints: z.object({
+    player: positionSchema,
+    npcSpawns: z.array(z.object({
+      npcId: z.string(),
+      position: positionSchema,
+    })),
+  }).optional(),
+  decorRules: z.object({
+    density: z.number().min(0).max(1),
+    propThemes: z.array(z.string()),
+  }).optional(),
 });
 
 // ============================================
@@ -270,13 +294,13 @@ export const worldRecipeSchema = z.object({
   worldId: z.string().describe('Unique world identifier'),
   seed: z.string().describe('Generation seed for reproducibility'),
   dish: dishSchema,
-  regions: z.array(regionSpecSchema).min(2).max(5),
+  regions: z.array(regionSpecSchema).min(1).max(5),
   ingredientGraph: ingredientGraphSchema,
-  questArcs: z.array(questArcSchema).min(2).max(6),
-  npcRoster: z.array(npcSchema).min(8).max(20),
+  questArcs: z.array(questArcSchema).min(1).max(10),
+  npcRoster: z.array(npcSchema).min(2).max(30),
   colorSystem: z.object({
-    uiTokens: z.record(z.string(), z.string()),
-    environmentTokens: z.record(z.string(), z.string()),
+    uiTokens: z.record(z.string(), z.string()).default({}),
+    environmentTokens: z.record(z.string(), z.string()).default({}),
   }),
   startingInventory: z.array(itemStackSchema).default([]),
 });

@@ -8,6 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { normalizePosition, type Position } from '@/types/game';
+
+// Helper to get position as tuple for backward compatibility
+function getPos(pos: Position): [number, number] {
+  return normalizePosition(pos);
+}
 
 // ============================================
 // Animated Number Display
@@ -122,7 +128,8 @@ function MiniMap() {
   const world = useWorldStore((s) => s.world);
   const timeOfDay = useGameStore((s) => s.timeOfDay);
   
-  const pois = region?.mapSpec.pois || [];
+  // POIs can be at region level or mapSpec level (AI may generate either)
+  const pois = region ? [...(region.pois || []), ...(region.mapSpec?.pois || [])] : [];
   const npcs = world?.npcRoster || [];
   const ingredients = world?.ingredientGraph.ingredients || [];
   const mapWidth = region?.mapSpec?.grid?.width || 50;
@@ -172,10 +179,11 @@ function MiniMap() {
     }
     
     if (poi) {
+      const [px, py] = getPos(poi.position);
       return {
         npc,
-        x: poi.position[0] + offsetX,
-        y: poi.position[1] + offsetZ,
+        x: px + offsetX,
+        y: py + offsetZ,
       };
     }
     
@@ -217,6 +225,26 @@ function MiniMap() {
     liquid: 'bg-blue-400',
   };
   
+  // Get trade ingredients and their NPC locations
+  const tradeIngredients = ingredients
+    .filter(i => 
+      i.regionId === region?.regionId &&
+      i.gatherMethod === 'trade'
+    )
+    .map(ingredient => {
+      // Find an NPC who might trade this item (market or shop NPCs)
+      const tradingNpc = npcs.find(npc => 
+        npc.role.services.some(s => 
+          s.toLowerCase().includes('trade') || 
+          s.toLowerCase().includes('sell') ||
+          s.toLowerCase().includes('shop')
+        )
+      );
+      const npcPos = tradingNpc ? npcPositions.find(p => p.npc.npcId === tradingNpc.npcId) : null;
+      return { ingredient, npcPos };
+    })
+    .filter(item => item.npcPos);
+  
   return (
     <Card 
       className="hud-card w-40 h-40 bg-card/95 backdrop-blur-md border-primary/20 overflow-hidden shadow-xl cursor-pointer"
@@ -253,8 +281,9 @@ function MiniMap() {
         
         {/* POI indicators */}
         {pois.map((poi) => {
-          const x = 50 + (poi.position[0] / mapSize) * 80;
-          const y = 50 + (poi.position[1] / mapSize) * 80;
+          const [px, py] = getPos(poi.position);
+          const x = 50 + (px / mapSize) * 80;
+          const y = 50 + (py / mapSize) * 80;
           
           return (
             <div
@@ -273,16 +302,40 @@ function MiniMap() {
         {npcPositions.map(({ npc, x, y }) => {
           const mapX = 50 + (x / mapSize) * 80;
           const mapY = 50 + (y / mapSize) * 80;
+          const canTrade = npc.role.services.some(s => 
+            s.toLowerCase().includes('trade') || 
+            s.toLowerCase().includes('sell') ||
+            s.toLowerCase().includes('shop')
+          );
           
           return (
             <div
               key={npc.npcId}
-              className="absolute w-2 h-2 bg-fuchsia-400 rounded-full transform -translate-x-1/2 -translate-y-1/2 border border-white/50 shadow-sm"
+              className={`absolute w-2 h-2 ${canTrade ? 'bg-yellow-400' : 'bg-fuchsia-400'} rounded-full transform -translate-x-1/2 -translate-y-1/2 border border-white/50 shadow-sm ${canTrade ? 'ring-1 ring-yellow-300' : ''}`}
               style={{
                 left: `${Math.max(8, Math.min(92, mapX))}%`,
                 top: `${Math.max(8, Math.min(92, mapY))}%`,
               }}
-              title={npc.name}
+              title={`${npc.name}${canTrade ? ' (Trader)' : ''}`}
+            />
+          );
+        })}
+        
+        {/* Trade ingredient indicators near NPCs */}
+        {tradeIngredients.map(({ ingredient, npcPos }) => {
+          if (!npcPos) return null;
+          const mapX = 50 + ((npcPos.x + 1.5) / mapSize) * 80;
+          const mapY = 50 + ((npcPos.y - 1) / mapSize) * 80;
+          
+          return (
+            <div
+              key={`trade-${ingredient.ingredientId}`}
+              className="absolute w-1.5 h-1.5 bg-yellow-300 rounded transform -translate-x-1/2 -translate-y-1/2 opacity-80 border border-yellow-500"
+              style={{
+                left: `${Math.max(5, Math.min(95, mapX))}%`,
+                top: `${Math.max(5, Math.min(95, mapY))}%`,
+              }}
+              title={`${ingredient.name} (Trade)`}
             />
           );
         })}
@@ -327,10 +380,10 @@ function MiniMap() {
         
         {/* Legend overlay */}
         {showLegend && (
-          <div className="absolute inset-0 bg-black/80 p-2 text-[8px] space-y-1 animate-in fade-in duration-150">
-            <div className="font-bold text-white text-[9px] mb-1">Legend</div>
+          <div className="absolute inset-0 bg-black/90 p-2 text-[8px] space-y-1 animate-in fade-in duration-150 overflow-y-auto">
+            <div className="font-bold text-white text-[9px] mb-1">Map Legend</div>
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-cyan-400 rounded-full" />
+              <div className="w-2 h-2 bg-cyan-400 rounded-full border border-white" />
               <span className="text-white/80">You</span>
             </div>
             <div className="flex items-center gap-1">
@@ -338,14 +391,22 @@ function MiniMap() {
               <span className="text-white/80">NPCs</span>
             </div>
             <div className="flex items-center gap-1">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full ring-1 ring-yellow-300" />
+              <span className="text-white/80">Traders</span>
+            </div>
+            <div className="flex items-center gap-1">
               <div className="w-2 h-2 bg-yellow-400 rounded-sm" />
-              <span className="text-white/80">POIs</span>
+              <span className="text-white/80">Locations</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 bg-green-400 rounded-full" />
-              <span className="text-white/80">Ingredients</span>
+              <span className="text-white/80">Pick up</span>
             </div>
-            <div className="text-white/50 mt-1">Click to close</div>
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-yellow-300 rounded border border-yellow-500" />
+              <span className="text-white/80">Trade items</span>
+            </div>
+            <div className="text-white/40 mt-1 text-[7px]">Click to close</div>
           </div>
         )}
       </div>
@@ -425,10 +486,49 @@ function DishProgress() {
 }
 
 // ============================================
-// Quest Tracker - Enhanced
+// Quest Tracker - Enhanced with Guidance
 // ============================================
 function QuestTracker() {
   const activeQuests = usePlayerStore((s) => s.activeQuests);
+  const world = useWorldStore((s) => s.world);
+  const inventory = usePlayerStore((s) => s.inventory);
+  
+  // Helper to get guidance for an objective
+  const getObjectiveGuidance = (objective: { type: string; target: string; quantity?: number; completed: boolean }) => {
+    if (objective.completed) return null;
+    
+    const objectiveIcons: Record<string, string> = {
+      gather: '🌿',
+      talk: '💬',
+      deliver: '📦',
+      craft: '🔨',
+      'cook-step': '🍳',
+    };
+    
+    switch (objective.type) {
+      case 'gather': {
+        // Check if ingredient is trade-only
+        const ingredient = world?.ingredientGraph.ingredients.find(i => i.ingredientId === objective.target);
+        if (ingredient?.gatherMethod === 'trade') {
+          return { icon: '🔄', hint: 'Trade with an NPC' };
+        }
+        return { icon: objectiveIcons.gather, hint: 'Explore the map' };
+      }
+      case 'talk': {
+        const npc = world?.npcRoster.find(n => n.npcId === objective.target);
+        return { icon: objectiveIcons.talk, hint: npc ? `Find ${npc.name}` : 'Find the NPC' };
+      }
+      case 'deliver': {
+        return { icon: objectiveIcons.deliver, hint: 'Return to quest giver' };
+      }
+      case 'craft':
+        return { icon: objectiveIcons.craft, hint: 'Use cooking station' };
+      case 'cook-step':
+        return { icon: objectiveIcons['cook-step'], hint: 'Press C to cook' };
+      default:
+        return null;
+    }
+  };
   
   if (activeQuests.length === 0) {
     return (
@@ -436,7 +536,9 @@ function QuestTracker() {
         <div className="text-center py-2">
           <span className="text-2xl mb-2 block">📜</span>
           <p className="text-xs text-muted-foreground">No active quests</p>
-          <p className="text-[10px] text-muted-foreground/70">Talk to NPCs to find quests!</p>
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            🗣️ Talk to NPCs (pink dots on map) to find quests!
+          </p>
         </div>
       </Card>
     );
@@ -446,6 +548,7 @@ function QuestTracker() {
   const completedObjectives = currentQuest.objectives.filter((o) => o.completed).length;
   const totalObjectives = currentQuest.objectives.length;
   const progress = (completedObjectives / totalObjectives) * 100;
+  const nextObjective = currentQuest.objectives.find(o => !o.completed);
   
   return (
     <Card className="hud-card px-4 py-3 bg-card/95 backdrop-blur-md border-primary/20 max-w-xs shadow-lg animate-in slide-in-from-right">
@@ -470,23 +573,45 @@ function QuestTracker() {
         
         <p className="text-sm font-semibold text-foreground">{currentQuest.title}</p>
         
-        <div className="space-y-1.5 max-h-32 overflow-y-auto">
-          {currentQuest.objectives.map((objective, i) => (
-            <div
-              key={objective.objectiveId}
-              className={`text-xs flex items-start gap-2 p-1.5 rounded transition-all ${
-                objective.completed 
-                  ? 'text-muted-foreground bg-muted/30 line-through opacity-60' 
-                  : 'text-foreground bg-primary/10'
-              }`}
-            >
-              <span className={`mt-0.5 ${objective.completed ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                {objective.completed ? '✓' : '○'}
+        {/* Current objective hint */}
+        {nextObjective && (
+          <div className="bg-amber-500/20 border border-amber-500/30 rounded-lg p-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400">💡</span>
+              <span className="text-amber-200 font-medium">
+                {getObjectiveGuidance(nextObjective)?.hint || 'Complete the objective'}
               </span>
-              <span className="flex-1">{objective.description}</span>
             </div>
-          ))}
+          </div>
+        )}
+        
+        <div className="space-y-1.5 max-h-28 overflow-y-auto">
+          {currentQuest.objectives.map((objective) => {
+            const guidance = getObjectiveGuidance(objective);
+            return (
+              <div
+                key={objective.objectiveId}
+                className={`text-xs flex items-start gap-2 p-1.5 rounded transition-all ${
+                  objective.completed 
+                    ? 'text-muted-foreground bg-muted/30 line-through opacity-60' 
+                    : 'text-foreground bg-primary/10'
+                }`}
+              >
+                <span className={`mt-0.5 ${objective.completed ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                  {objective.completed ? '✓' : guidance?.icon || '○'}
+                </span>
+                <span className="flex-1">{objective.description}</span>
+              </div>
+            );
+          })}
         </div>
+        
+        {/* All complete? */}
+        {completedObjectives === totalObjectives && (
+          <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-lg p-2 text-xs text-center">
+            <span className="text-emerald-300">✨ Return to quest giver to complete!</span>
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -622,6 +747,65 @@ function ControlsHelp() {
 }
 
 // ============================================
+// Getting Started Tip for New Players
+// ============================================
+function GettingStartedTip() {
+  const [dismissed, setDismissed] = useState(false);
+  const activeQuests = usePlayerStore((s) => s.activeQuests);
+  const inventory = usePlayerStore((s) => s.inventory);
+  const collectedItemIds = usePlayerStore((s) => s.collectedItemIds);
+  
+  // Only show if player is truly new (no quests, no items, nothing collected)
+  const isNewPlayer = activeQuests.length === 0 && inventory.length === 0 && collectedItemIds.length === 0;
+  
+  if (!isNewPlayer || dismissed) return null;
+  
+  return (
+    <Card className="hud-card px-4 py-3 bg-gradient-to-br from-amber-900/95 to-orange-900/95 border-amber-500/40 max-w-sm shadow-xl animate-in fade-in slide-in-from-top duration-500">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl animate-bounce">👋</span>
+            <h3 className="font-bold text-amber-200">Getting Started</h3>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-6 w-6 p-0 text-amber-300 hover:text-white hover:bg-amber-800/50"
+            onClick={() => setDismissed(true)}
+          >
+            ✕
+          </Button>
+        </div>
+        
+        <div className="space-y-2 text-xs text-amber-100">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-400">1.</span>
+            <span><strong>Explore</strong> the map with WASD or Arrow keys</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-amber-400">2.</span>
+            <span><strong>Collect ingredients</strong> (glowing items) by pressing E or SPACE</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-amber-400">3.</span>
+            <span><strong>Talk to NPCs</strong> (pink dots on map) for quests & trades</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-amber-400">4.</span>
+            <span><strong>Trade</strong> with yellow-highlighted NPCs for special items</span>
+          </div>
+        </div>
+        
+        <div className="text-[10px] text-amber-300/70 pt-1 border-t border-amber-500/30">
+          💡 Check the mini-map (top-right) to find NPCs and ingredients!
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ============================================
 // FPS Counter (Development)
 // ============================================
 function FPSCounter() {
@@ -686,6 +870,11 @@ export function HUD() {
       {/* Right Side - Quest Tracker */}
       <div className="absolute top-48 right-4 pointer-events-auto">
         <QuestTracker />
+      </div>
+      
+      {/* Center Top - Getting Started Tip for New Players */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-auto">
+        <GettingStartedTip />
       </div>
       
       {/* Bottom Left - Quick Actions & Controls */}

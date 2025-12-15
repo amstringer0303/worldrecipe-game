@@ -10,7 +10,26 @@ import { eq } from 'drizzle-orm';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    // Check if request has a body
+    const text = await request.text();
+    if (!text || text.length === 0) {
+      console.warn('Save request received with empty body');
+      return NextResponse.json(
+        { error: 'Request body is empty' },
+        { status: 400 }
+      );
+    }
+    
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (parseError) {
+      console.error('Failed to parse save body:', text.substring(0, 100));
+      return NextResponse.json(
+        { error: 'Invalid JSON body' },
+        { status: 400 }
+      );
+    }
     
     const {
       saveId,

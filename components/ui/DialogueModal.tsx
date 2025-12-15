@@ -226,8 +226,11 @@ export function DialogueModal() {
     }
   };
   
-  const handleChoiceSelect = useCallback((choice: { text: string; effect?: { type: string; value?: string | number } }) => {
-    if (!npcId) return;
+  const handleChoiceSelect = useCallback(async (choice: { text: string; effect?: { type: string; value?: string | number } }) => {
+    if (!npcId || !world) return;
+    
+    let shouldFetchFollowUp = true;
+    let effectApplied = '';
     
     // Apply effect
     if (choice.effect) {
@@ -237,6 +240,7 @@ export function DialogueModal() {
             npcId, 
             typeof choice.effect.value === 'number' ? choice.effect.value : 1
           );
+          effectApplied = 'relationship';
           break;
           
         case 'quest_accept':
@@ -247,6 +251,7 @@ export function DialogueModal() {
               acceptQuest(quest);
               // Also boost relationship
               updateRelationship(npcId, 1);
+              effectApplied = 'quest_accept';
             }
           }
           break;
@@ -256,16 +261,19 @@ export function DialogueModal() {
           if (typeof choice.effect.value === 'string') {
             completeQuest(choice.effect.value);
             updateRelationship(npcId, 2);
+            effectApplied = 'quest_complete';
           }
           break;
           
         case 'trade':
-          // Open trade modal
+          // Open trade modal - don't fetch follow up, keep dialogue
           setShowTradeModal(true);
-          return; // Don't close dialogue
+          shouldFetchFollowUp = false;
+          return;
           
         case 'deliver':
           // Handle delivery - would need specific item logic
+          effectApplied = 'deliver';
           break;
           
         case 'farewell':
@@ -277,7 +285,8 @@ export function DialogueModal() {
           return;
           
         case 'hint':
-          // Could show a hint toast
+          // Show hint and continue
+          effectApplied = 'hint';
           break;
       }
     }
@@ -287,9 +296,97 @@ export function DialogueModal() {
       addConversationMemory(npcId, `${choice.text} - ${conversationSummary}`);
     }
     
-    // Close after choice (or continue to next dialogue node in future)
-    handleClose();
-  }, [npcId, updateRelationship, acceptQuest, completeQuest, getQuestChapter, addConversationMemory, conversationSummary]);
+    // Fetch follow-up dialogue instead of closing
+    if (shouldFetchFollowUp) {
+      setIsLoading(true);
+      setTextComplete(false);
+      
+      try {
+        const relationship = getRelationship(npcId);
+        const activeQuestIds = activeQuests.map(q => q.questId);
+        
+        // Get updated available quests for this NPC
+        const availableQuests = getAvailableQuestsForNPC(
+          npcId, 
+          activeQuestIds, 
+          completedQuestIds
+        ).map(q => ({
+          questId: q.questId,
+          title: q.title,
+          description: q.description,
+        }));
+        
+        // Get active quests with this NPC
+        const activeQuestsWithThisNPC = activeQuests
+          .filter(q => q.giverNpcId === npcId)
+          .map(q => ({
+            questId: q.questId,
+            title: q.title,
+            objectives: q.objectives.map(o => ({
+              description: o.description,
+              completed: o.completed,
+            })),
+          }));
+        
+        // Get tradeable ingredients
+        const tradeableIngredients = getTradeableIngredients(npcId);
+        
+        // Get conversation history
+        const conversationHistory = getConversationMemory(npcId);
+        
+        // Get player inventory summary
+        const playerInventory = inventory.slice(0, 10).map(s => ({
+          name: s.item.name,
+          quantity: s.quantity,
+        }));
+        
+        const response = await fetch('/api/ai/npc/dialogue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            worldId: world.worldId,
+            npcId,
+            context: {
+              relationshipLevel: relationship,
+              activeQuests: activeQuestIds,
+              activeQuestsWithThisNPC,
+              availableQuests,
+              playerInventory,
+              tradeableIngredients,
+              conversationHistory: [...conversationHistory, `Player chose: ${choice.text}`],
+              currentTimeOfDay: timeOfDay,
+              playerName: 'Chef',
+              lastChoice: choice.text,
+              lastEffect: effectApplied,
+            },
+          }),
+        });
+        
+        const data = await response.json();
+        setCurrentDialogue(data.dialogue);
+        setConversationSummary(data.conversationSummary);
+      } catch (error) {
+        console.error('Failed to fetch follow-up dialogue:', error);
+        // On error, show a simple follow-up then close
+        setCurrentDialogue({
+          speaker: npc?.name || 'NPC',
+          text: effectApplied === 'quest_accept' 
+            ? "Wonderful! I knew I could count on you. Check your journal for the quest details!"
+            : effectApplied === 'quest_complete'
+            ? "You did it! Thank you so much. Here's a little something for your trouble."
+            : "Is there anything else I can help you with?",
+          emotion: effectApplied ? 'happy' : 'neutral',
+          choices: [
+            { text: "Tell me more about this place", effect: { type: 'relationship', value: 1 } },
+            { text: "What do you have for trade?", effect: { type: 'trade' } },
+            { text: "I should get going", effect: { type: 'farewell' } },
+          ],
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, [npcId, world, npc, updateRelationship, acceptQuest, completeQuest, getQuestChapter, addConversationMemory, conversationSummary, getRelationship, activeQuests, completedQuestIds, getAvailableQuestsForNPC, getTradeableIngredients, getConversationMemory, inventory, timeOfDay]);
   
   const handleClose = useCallback(() => {
     setCurrentDialogue(null);

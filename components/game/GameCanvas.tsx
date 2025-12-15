@@ -502,7 +502,8 @@ function WorldContent() {
     return <FallbackGround />;
   }
   
-  const allPois = region.mapSpec.pois;
+  // POIs can be at region level or mapSpec level (AI may generate either)
+  const allPois = [...(region.pois || []), ...(region.mapSpec?.pois || [])];
   
   return (
     <>

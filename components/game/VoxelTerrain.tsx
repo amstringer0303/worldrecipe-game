@@ -6,6 +6,7 @@ import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import { RoundedBox, Float, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
 import type { RegionSpec, POI } from '@/types/game';
+import { normalizePosition, normalizeSize } from '@/types/game';
 
 // ============================================
 // Animated Butterfly Component
@@ -542,12 +543,14 @@ function POIMarker({ poi, palette }: { poi: POI; palette: any }) {
   
   const markerColor = markerColors[poi.type] || palette.accent;
   
-  if (!Number.isFinite(poi.position[0]) || !Number.isFinite(poi.position[1])) {
+  const [poiX, poiZ] = normalizePosition(poi.position);
+  
+  if (!Number.isFinite(poiX) || !Number.isFinite(poiZ)) {
     return null;
   }
   
   return (
-    <group ref={markerRef} position={[poi.position[0], 0, poi.position[1]]}>
+    <group ref={markerRef} position={[poiX, 0, poiZ]}>
       {/* Collision area for POI */}
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider 
@@ -816,6 +819,9 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
     return null;
   }
   
+  // POIs can be at region level or mapSpec level (AI may generate either)
+  const allPois = [...(region.pois || []), ...(mapSpec?.pois || [])];
+  
   // Generate decoration positions using seeded random
   const decorations = useMemo(() => {
     const random = seededRandom(seed + region.regionId);
@@ -829,7 +835,8 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
     const fireflies: { pos: [number, number, number]; delay: number }[] = [];
     
     const { width, height } = mapSpec.grid;
-    const density = mapSpec.decorRules.density;
+    const decorRules = region.decorRules || mapSpec.decorRules || { density: 0.3, propThemes: [] };
+    const density = decorRules.density || 0.3;
     
     const numDecorations = Math.floor(width * height * density * 0.15);
     
@@ -837,14 +844,16 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       const x = (random() - 0.5) * (width - 4);
       const z = (random() - 0.5) * (height - 4);
       
-      const inWater = mapSpec.terrain.waterBodies.some(wb => 
-        Math.abs(x - wb.position[0]) < wb.size[0] / 2 + 1 &&
-        Math.abs(z - wb.position[1]) < wb.size[1] / 2 + 1
-      );
+      const inWater = mapSpec.terrain.waterBodies.some(wb => {
+        const [wbx, wby] = normalizePosition(wb.position);
+        const [wbw, wbh] = normalizeSize(wb.size);
+        return Math.abs(x - wbx) < wbw / 2 + 1 && Math.abs(z - wby) < wbh / 2 + 1;
+      });
       
-      const nearPOI = mapSpec.pois.some(poi =>
-        Math.sqrt(Math.pow(x - poi.position[0], 2) + Math.pow(z - poi.position[1], 2)) < 6
-      );
+      const nearPOI = allPois.some(poi => {
+        const [px, py] = normalizePosition(poi.position);
+        return Math.sqrt(Math.pow(x - px, 2) + Math.pow(z - py, 2)) < 6;
+      });
       
       if (inWater || nearPOI) continue;
       
@@ -997,8 +1006,11 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       ))}
       
       {/* POI Markers */}
-      {mapSpec.pois
-        .filter(poi => isValidPosition(poi.position))
+      {allPois
+        .filter(poi => {
+          const [px, py] = normalizePosition(poi.position);
+          return Number.isFinite(px) && Number.isFinite(py);
+        })
         .map((poi) => (
           <POIMarker key={poi.poiId} poi={poi} palette={palette} />
         ))}

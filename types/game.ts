@@ -152,13 +152,46 @@ export interface Dish {
   storyHook: string;
 }
 
+// Position types - support both tuple and object formats
+export type PositionTuple = [number, number];
+export type PositionObject = { x: number; y: number };
+export type Position = PositionTuple | PositionObject;
+
+// Helper to normalize position to tuple format
+export function normalizePosition(pos: Position): [number, number] {
+  if (Array.isArray(pos)) {
+    return pos;
+  }
+  return [pos.x, pos.y];
+}
+
 // Map and region
 export interface POI {
   poiId: string;
   type: 'market' | 'dock' | 'shrine' | 'farm' | 'kitchen_hut' | 'npc_home' | 'gathering_spot';
   name: string;
-  position: [number, number];
+  position: Position;
   interactRadius: number;
+}
+
+export type Size = [number, number] | { width: number; height: number };
+
+// Helper to normalize size to tuple format
+export function normalizeSize(size: Size): [number, number] {
+  if (Array.isArray(size)) {
+    return size;
+  }
+  return [size.width, size.height];
+}
+
+export interface DecorRules {
+  density: number;
+  propThemes: string[];
+}
+
+export interface SpawnPoints {
+  player: Position;
+  npcSpawns: { npcId: string; position: Position }[];
 }
 
 export interface MapSpec {
@@ -168,19 +201,14 @@ export interface MapSpec {
     cellSize: number;
   };
   terrain: {
-    waterBodies: { position: [number, number]; size: [number, number] }[];
-    elevationHints: { position: [number, number]; height: number }[];
-    paths: { from: [number, number]; to: [number, number] }[];
+    waterBodies: { position: Position; size: Size }[];
+    elevationHints: { position: Position; height: number }[];
+    paths: { from: Position; to: Position }[];
   };
-  pois: POI[];
-  spawnPoints: {
-    player: [number, number];
-    npcSpawns: { npcId: string; position: [number, number] }[];
-  };
-  decorRules: {
-    density: number;
-    propThemes: string[];
-  };
+  // These can be optional at mapSpec level if defined at region level
+  pois?: POI[];
+  spawnPoints?: SpawnPoints;
+  decorRules?: DecorRules;
 }
 
 export interface Palette {
@@ -207,6 +235,10 @@ export interface RegionSpec {
   biomes: string[];
   palette: Palette;
   mapSpec: MapSpec;
+  // These can be at region level (AI sometimes generates them here)
+  pois?: POI[];
+  spawnPoints?: SpawnPoints;
+  decorRules?: DecorRules;
 }
 
 // Ingredient graph
@@ -215,7 +247,7 @@ export interface IngredientNode {
   name: string;
   category: string;
   regionId: string;
-  gatherMethod: 'pickup' | 'harvest' | 'fish' | 'trade' | 'craft';
+  gatherMethod: 'pickup' | 'harvest' | 'fish' | 'trade' | 'craft' | 'gather' | 'forage';
 }
 
 export interface DependencyEdge {

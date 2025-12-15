@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { NPC, POI } from '@/types/game';
+import { normalizePosition } from '@/types/game';
 import { useGameStore } from '@/lib/store/gameStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
 
@@ -226,8 +227,11 @@ export function SingleNPCController({ npc, pois, onInteract }: NPCControllerProp
     
     // Try to find the scheduled POI
     const poi = pois.find(p => p.poiId === currentSchedule?.locationId);
-    if (poi && Number.isFinite(poi.position[0]) && Number.isFinite(poi.position[1])) {
-      return [poi.position[0] + offsetX, 0.5, poi.position[1] + offsetZ] as [number, number, number];
+    if (poi) {
+      const [px, py] = normalizePosition(poi.position);
+      if (Number.isFinite(px) && Number.isFinite(py)) {
+        return [px + offsetX, 0.5, py + offsetZ] as [number, number, number];
+      }
     }
     
     // Try to match by POI name or type if locationId doesn't match directly
@@ -237,8 +241,11 @@ export function SingleNPCController({ npc, pois, onInteract }: NPCControllerProp
       p.type === scheduleLocation ||
       scheduleLocation.includes(p.poiId)
     );
-    if (matchingPoi && Number.isFinite(matchingPoi.position[0]) && Number.isFinite(matchingPoi.position[1])) {
-      return [matchingPoi.position[0] + offsetX, 0.5, matchingPoi.position[1] + offsetZ] as [number, number, number];
+    if (matchingPoi) {
+      const [mpx, mpy] = normalizePosition(matchingPoi.position);
+      if (Number.isFinite(mpx) && Number.isFinite(mpy)) {
+        return [mpx + offsetX, 0.5, mpy + offsetZ] as [number, number, number];
+      }
     }
     
     // Fallback: spread NPCs around the map based on their hash

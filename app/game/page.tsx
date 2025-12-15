@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { HUD } from '@/components/ui/HUD';
 import { DialogueModal } from '@/components/ui/DialogueModal';
@@ -171,6 +172,7 @@ export default function GamePage() {
   const [showComplete, setShowComplete] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const hasInitialized = useRef(false);
+  const searchParams = useSearchParams();
   
   const isPaused = useGameStore((s) => s.isPaused);
   const setPaused = useGameStore((s) => s.setPaused);
@@ -197,14 +199,19 @@ export default function GamePage() {
     const initializeGame = async () => {
       setIsInitializing(true);
       
+      // Get dish from URL params or use default
+      const dishPrompt = searchParams.get('dish') || 'Simple Ramen';
+      const difficulty = searchParams.get('difficulty') || 'medium';
+      
       try {
         // First, generate/load the world
         const res = await fetch('/api/ai/world', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            dishPrompt: 'Simple Ramen',
-            seed: 'demo-seed',
+            dishPrompt,
+            seed: `${dishPrompt}-${Date.now()}`,
+            playerPrefs: { difficulty },
           }),
         });
         
@@ -220,6 +227,7 @@ export default function GamePage() {
             console.log('Restored from previous save');
           } else {
             console.log('Starting new game');
+            showInfo(`🍳 ${data.world.dish.name}`, data.world.dish.tagline);
           }
         } else if (data.error) {
           console.error('World generation error:', data.error);
@@ -235,7 +243,7 @@ export default function GamePage() {
     };
     
     initializeGame();
-  }, [setWorld, loadLatestSave]);
+  }, [setWorld, loadLatestSave, searchParams, showInfo]);
   
   // Start autosave when playing
   useEffect(() => {
