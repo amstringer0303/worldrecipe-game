@@ -7,6 +7,7 @@ import { RoundedBox, Float, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
 import type { RegionSpec, POI } from '@/types/game';
 import { normalizePosition, normalizeSize } from '@/types/game';
+import { renderProp, type PropType } from './PropLibrary';
 
 // ============================================
 // Animated Butterfly Component
@@ -893,7 +894,140 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
     const { width, height } = mapSpec.grid;
     const decorRules = region.decorRules || mapSpec.decorRules || { density: 0.3, propThemes: [], clusters: [] };
     const density = decorRules.density || 0.3;
+    const propThemes = decorRules.propThemes || [];
     const clusters = decorRules.clusters || [];
+    
+    // Helper function to map prop theme strings to PropType
+    const getPropTypeFromTheme = (theme: string, random: () => number): PropType | null => {
+      const themeLower = theme.toLowerCase();
+      
+      // Asian themes
+      if (themeLower.includes('ramen') || themeLower.includes('street')) {
+        const props: PropType[] = ['noodle_stall', 'lantern', 'paper_banner', 'market_stall'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('bamboo') || themeLower.includes('grove')) {
+        const props: PropType[] = ['bamboo', 'cherry_tree', 'shrine_gate', 'lantern'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('temple') || themeLower.includes('shrine')) {
+        const props: PropType[] = ['shrine_gate', 'lantern', 'stone', 'cherry_tree'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('cherry') || themeLower.includes('garden')) {
+        const props: PropType[] = ['cherry_tree', 'flowers', 'lantern', 'stone'];
+        return props[Math.floor(random() * props.length)];
+      }
+      
+      // Desert themes
+      if (themeLower.includes('desert') || themeLower.includes('oasis')) {
+        const props: PropType[] = ['cactus', 'agave', 'adobe_wall', 'stone'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('adobe') || themeLower.includes('market')) {
+        const props: PropType[] = ['adobe_wall', 'market_stall', 'barrel', 'crate'];
+        return props[Math.floor(random() * props.length)];
+      }
+      
+      // Alpine themes
+      if (themeLower.includes('alpine') || themeLower.includes('mountain')) {
+        const props: PropType[] = ['snow_pine', 'stone', 'moss_rock', 'grass_tuft'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('snow') || themeLower.includes('pine')) {
+        const props: PropType[] = ['snow_pine', 'stone', 'moss_rock'];
+        return props[Math.floor(random() * props.length)];
+      }
+      
+      // Tropical themes
+      if (themeLower.includes('tropical') || themeLower.includes('palm')) {
+        const props: PropType[] = ['palm_tree', 'coral', 'flowers', 'grass_tuft'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('beach') || themeLower.includes('coral')) {
+        const props: PropType[] = ['coral', 'palm_tree', 'stone', 'fishing_net'];
+        return props[Math.floor(random() * props.length)];
+      }
+      
+      // Coastal themes
+      if (themeLower.includes('coastal') || themeLower.includes('dock')) {
+        const props: PropType[] = ['fishing_net', 'barrel', 'crate', 'lantern'];
+        return props[Math.floor(random() * props.length)];
+      }
+      
+      // Generic fallbacks
+      if (themeLower.includes('market')) {
+        const props: PropType[] = ['market_stall', 'barrel', 'crate', 'lantern'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('garden') || themeLower.includes('grove')) {
+        const props: PropType[] = ['flowers', 'grass_tuft', 'stone', 'lantern'];
+        return props[Math.floor(random() * props.length)];
+      }
+      if (themeLower.includes('forest') || themeLower.includes('tree')) {
+        const props: PropType[] = ['cherry_tree', 'bamboo', 'snow_pine', 'palm_tree'];
+        return props[Math.floor(random() * props.length)];
+      }
+      
+      return null;
+    };
+    
+    // Helper function to map cluster prop strings to PropType
+    const getPropTypeFromClusterProp = (propName: string): PropType | null => {
+      const propLower = propName.toLowerCase();
+      const propMap: Record<string, PropType> = {
+        'bamboo': 'bamboo',
+        'lantern': 'lantern',
+        'shrine_gate': 'shrine_gate',
+        'noodle_stall': 'noodle_stall',
+        'cherry_tree': 'cherry_tree',
+        'paper_banner': 'paper_banner',
+        'cactus': 'cactus',
+        'agave': 'agave',
+        'adobe_wall': 'adobe_wall',
+        'market_stall': 'market_stall',
+        'fishing_net': 'fishing_net',
+        'barrel': 'barrel',
+        'crate': 'crate',
+        'stone': 'stone',
+        'grass_tuft': 'grass_tuft',
+        'flowers': 'flowers',
+        'moss_rock': 'moss_rock',
+        'snow_pine': 'snow_pine',
+        'coral': 'coral',
+        'palm_tree': 'palm_tree',
+      };
+      
+      // Direct match
+      if (propMap[propLower]) return propMap[propLower];
+      
+      // Partial matches
+      if (propLower.includes('bamboo')) return 'bamboo';
+      if (propLower.includes('lantern')) return 'lantern';
+      if (propLower.includes('gate') || propLower.includes('shrine')) return 'shrine_gate';
+      if (propLower.includes('stall') || propLower.includes('noodle')) return 'noodle_stall';
+      if (propLower.includes('cherry') || propLower.includes('tree')) return 'cherry_tree';
+      if (propLower.includes('banner') || propLower.includes('paper')) return 'paper_banner';
+      if (propLower.includes('cactus')) return 'cactus';
+      if (propLower.includes('agave')) return 'agave';
+      if (propLower.includes('wall') || propLower.includes('adobe')) return 'adobe_wall';
+      if (propLower.includes('market')) return 'market_stall';
+      if (propLower.includes('net') || propLower.includes('fishing')) return 'fishing_net';
+      if (propLower.includes('barrel')) return 'barrel';
+      if (propLower.includes('crate')) return 'crate';
+      if (propLower.includes('stone') || propLower.includes('rock')) return 'stone';
+      if (propLower.includes('grass')) return 'grass_tuft';
+      if (propLower.includes('flower')) return 'flowers';
+      if (propLower.includes('moss')) return 'moss_rock';
+      if (propLower.includes('pine') || propLower.includes('snow')) return 'snow_pine';
+      if (propLower.includes('coral')) return 'coral';
+      if (propLower.includes('palm')) return 'palm_tree';
+      
+      return null;
+    };
+    
+    // Props array for new prop-based decorations
+    const props: { type: PropType; pos: [number, number, number]; rotation: number; scale: number }[] = [];
     
     // Helper function to check if a position is within a cluster
     const isInCluster = (x: number, z: number): { cluster: typeof clusters[0] | null; distance: number } => {
@@ -916,24 +1050,11 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       return { cluster: null, distance: Infinity };
     };
     
-    // Helper function to get prop type based on cluster props or fallback to themes
-    const getPropTypeFromCluster = (cluster: typeof clusters[0], random: () => number): string | null => {
-      if (cluster.props && cluster.props.length > 0) {
-        const prop = cluster.props[Math.floor(random() * cluster.props.length)];
-        // Map prop strings to our decoration types
-        const propLower = prop.toLowerCase();
-        if (propLower.includes('tree') || propLower.includes('forest')) return 'tree';
-        if (propLower.includes('bush') || propLower.includes('shrub')) return 'bush';
-        if (propLower.includes('rock') || propLower.includes('stone')) return 'rock';
-        if (propLower.includes('flower') || propLower.includes('bloom')) return 'flower';
-        if (propLower.includes('mushroom') || propLower.includes('fungus')) return 'mushroom';
-        if (propLower.includes('grass') || propLower.includes('meadow')) return 'grass';
-      }
-      return null;
-    };
     
     // Baseline decorations scattered across the whole region
-    const numDecorations = Math.floor(width * height * density * 0.15);
+    // Use props from PropLibrary if propThemes are available, otherwise fall back to old decorations
+    const useProps = propThemes.length > 0;
+    const numDecorations = Math.floor(width * height * density * (useProps ? 0.25 : 0.15));
     
     for (let i = 0; i < numDecorations; i++) {
       const x = (random() - 0.5) * (width - 4);
@@ -956,30 +1077,54 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       const clusterInfo = isInCluster(x, z);
       if (clusterInfo.cluster) continue;
       
-      const type = random();
-      if (type < 0.2) {
-        trees.push({ 
-          pos: [x, 0, z], 
-          scale: 0.7 + random() * 0.5,
-          variant: Math.floor(random() * 3)
-        });
-      } else if (type < 0.35) {
-        bushes.push([x, 0, z]);
-      } else if (type < 0.45) {
-        rocks.push({ 
-          pos: [x, 0.15, z],
-          scale: 0.4 + random() * 0.5,
-          variant: Math.floor(random() * 4)
-        });
-      } else if (type < 0.65) {
-        flowers.push([x, 0, z]);
-      } else if (type < 0.75) {
-        mushrooms.push({
-          pos: [x, 0, z],
-          variant: Math.floor(random() * 4)
-        });
+      if (useProps && propThemes.length > 0) {
+        // Use propThemes to select props
+        const theme = propThemes[Math.floor(random() * propThemes.length)];
+        const propType = getPropTypeFromTheme(theme, random);
+        if (propType) {
+          props.push({
+            type: propType,
+            pos: [x, 0, z],
+            rotation: random() * Math.PI * 2,
+            scale: 0.8 + random() * 0.4
+          });
+        } else {
+          // Fallback to generic props
+          const fallbackProps: PropType[] = ['stone', 'grass_tuft', 'flowers', 'lantern'];
+          props.push({
+            type: fallbackProps[Math.floor(random() * fallbackProps.length)],
+            pos: [x, 0, z],
+            rotation: random() * Math.PI * 2,
+            scale: 0.8 + random() * 0.4
+          });
+        }
       } else {
-        grassPatches.push([x, 0, z]);
+        // Fallback to old decoration system for backward compatibility
+        const type = random();
+        if (type < 0.2) {
+          trees.push({ 
+            pos: [x, 0, z], 
+            scale: 0.7 + random() * 0.5,
+            variant: Math.floor(random() * 3)
+          });
+        } else if (type < 0.35) {
+          bushes.push([x, 0, z]);
+        } else if (type < 0.45) {
+          rocks.push({ 
+            pos: [x, 0.15, z],
+            scale: 0.4 + random() * 0.5,
+            variant: Math.floor(random() * 4)
+          });
+        } else if (type < 0.65) {
+          flowers.push([x, 0, z]);
+        } else if (type < 0.75) {
+          mushrooms.push({
+            pos: [x, 0, z],
+            variant: Math.floor(random() * 4)
+          });
+        } else {
+          grassPatches.push([x, 0, z]);
+        }
       }
     }
     
@@ -1026,39 +1171,56 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
         
         if (inWater || nearPOI) continue;
         
-        // Try to use cluster props, fallback to random type
-        const clusterPropType = getPropTypeFromCluster(cluster, random);
-        const type = random();
+        // Use cluster props if available, otherwise fallback to propThemes or old system
+        let propType: PropType | null = null;
         
-        let decorationPlaced = false;
-        if (clusterPropType === 'tree' || (!clusterPropType && type < 0.25)) {
-          trees.push({ 
-            pos: [x, 0, z], 
-            scale: 0.7 + random() * 0.5,
-            variant: Math.floor(random() * 3)
-          });
-          decorationPlaced = true;
-        } else if (clusterPropType === 'bush' || (!clusterPropType && type < 0.4)) {
-          bushes.push([x, 0, z]);
-          decorationPlaced = true;
-        } else if (clusterPropType === 'rock' || (!clusterPropType && type < 0.5)) {
-          rocks.push({ 
-            pos: [x, 0.15, z],
-            scale: 0.4 + random() * 0.5,
-            variant: Math.floor(random() * 4)
-          });
-          decorationPlaced = true;
-        } else if (clusterPropType === 'flower' || (!clusterPropType && type < 0.7)) {
-          flowers.push([x, 0, z]);
-          decorationPlaced = true;
-        } else if (clusterPropType === 'mushroom' || (!clusterPropType && type < 0.8)) {
-          mushrooms.push({
+        if (cluster.props && cluster.props.length > 0) {
+          // Prioritize cluster props
+          const clusterPropName = cluster.props[Math.floor(random() * cluster.props.length)];
+          propType = getPropTypeFromClusterProp(clusterPropName);
+        }
+        
+        if (!propType && propThemes.length > 0) {
+          // Fallback to propThemes
+          const theme = propThemes[Math.floor(random() * propThemes.length)];
+          propType = getPropTypeFromTheme(theme, random);
+        }
+        
+        if (propType) {
+          // Use new prop system
+          props.push({
+            type: propType,
             pos: [x, 0, z],
-            variant: Math.floor(random() * 4)
+            rotation: random() * Math.PI * 2,
+            scale: 0.8 + random() * 0.4
           });
-          decorationPlaced = true;
-        } else if (clusterPropType === 'grass' || !decorationPlaced) {
-          grassPatches.push([x, 0, z]);
+        } else {
+          // Fallback to old decoration system for backward compatibility
+          const type = random();
+          if (type < 0.25) {
+            trees.push({ 
+              pos: [x, 0, z], 
+              scale: 0.7 + random() * 0.5,
+              variant: Math.floor(random() * 3)
+            });
+          } else if (type < 0.4) {
+            bushes.push([x, 0, z]);
+          } else if (type < 0.5) {
+            rocks.push({ 
+              pos: [x, 0.15, z],
+              scale: 0.4 + random() * 0.5,
+              variant: Math.floor(random() * 4)
+            });
+          } else if (type < 0.7) {
+            flowers.push([x, 0, z]);
+          } else if (type < 0.8) {
+            mushrooms.push({
+              pos: [x, 0, z],
+              variant: Math.floor(random() * 4)
+            });
+          } else {
+            grassPatches.push([x, 0, z]);
+          }
         }
       }
     }
@@ -1085,8 +1247,67 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       });
     }
     
-    return { trees, bushes, rocks, flowers, mushrooms, grassPatches, butterflies, fireflies };
-  }, [seed, region.regionId, mapSpec]);
+    // POI-specific set dressing
+    const poiProps: { type: PropType; pos: [number, number, number]; rotation: number; scale: number }[] = [];
+    
+    for (const poi of allPois) {
+      const [px, py] = normalizePosition(poi.position);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+      
+      const poiRandom = seededRandom(seed + poi.poiId);
+      const numSetDressing = 2 + Math.floor(poiRandom() * 3); // 2-4 props per POI
+      
+      for (let i = 0; i < numSetDressing; i++) {
+        const angle = poiRandom() * Math.PI * 2;
+        const dist = 2.5 + poiRandom() * 2; // 2.5-4.5 units from POI
+        const x = px + Math.cos(angle) * dist;
+        const z = py + Math.sin(angle) * dist;
+        
+        // Skip if in water
+        const inWater = mapSpec.terrain.waterBodies.some(wb => {
+          const [wbx, wby] = normalizePosition(wb.position);
+          const [wbw, wbh] = normalizeSize(wb.size);
+          return Math.abs(x - wbx) < wbw / 2 + 1 && Math.abs(z - wby) < wbh / 2 + 1;
+        });
+        if (inWater) continue;
+        
+        let poiPropType: PropType | null = null;
+        
+        // POI-specific props
+        if (poi.type === 'market') {
+          const marketProps: PropType[] = ['lantern', 'barrel', 'crate', 'market_stall', 'paper_banner'];
+          poiPropType = marketProps[Math.floor(poiRandom() * marketProps.length)];
+        } else if (poi.type === 'dock') {
+          const dockProps: PropType[] = ['barrel', 'crate', 'fishing_net', 'lantern'];
+          poiPropType = dockProps[Math.floor(poiRandom() * dockProps.length)];
+        } else if (poi.type === 'farm') {
+          const farmProps: PropType[] = ['barrel', 'crate', 'flowers', 'grass_tuft', 'stone'];
+          poiPropType = farmProps[Math.floor(poiRandom() * farmProps.length)];
+        } else if (poi.type === 'shrine') {
+          const shrineProps: PropType[] = ['lantern', 'shrine_gate', 'stone', 'cherry_tree'];
+          poiPropType = shrineProps[Math.floor(poiRandom() * shrineProps.length)];
+        } else if (poi.type === 'kitchen_hut') {
+          const kitchenProps: PropType[] = ['barrel', 'crate', 'lantern', 'stone'];
+          poiPropType = kitchenProps[Math.floor(poiRandom() * kitchenProps.length)];
+        } else {
+          // Generic POI props
+          const genericProps: PropType[] = ['lantern', 'stone', 'flowers', 'grass_tuft'];
+          poiPropType = genericProps[Math.floor(poiRandom() * genericProps.length)];
+        }
+        
+        if (poiPropType) {
+          poiProps.push({
+            type: poiPropType,
+            pos: [x, 0, z],
+            rotation: poiRandom() * Math.PI * 2,
+            scale: 0.8 + poiRandom() * 0.4
+          });
+        }
+      }
+    }
+    
+    return { trees, bushes, rocks, flowers, mushrooms, grassPatches, butterflies, fireflies, props, poiProps };
+  }, [seed, region.regionId, mapSpec, allPois]);
   
   const flowerColors = useMemo(() => [
     palette.accent,
@@ -1187,6 +1408,16 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
           delay={firefly.delay}
         />
       ))}
+      
+      {/* Props from PropLibrary - baseline and cluster decorations */}
+      {decorations.props.map((prop, i) => 
+        renderProp(prop.type, prop.pos, prop.rotation, prop.scale)
+      )}
+      
+      {/* POI-specific set dressing props */}
+      {decorations.poiProps.map((prop, i) => 
+        renderProp(prop.type, prop.pos, prop.rotation, prop.scale)
+      )}
       
       {/* POI Markers */}
       {allPois

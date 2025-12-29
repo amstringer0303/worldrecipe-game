@@ -180,26 +180,49 @@ Create a cohesive world where:
 4. The ingredient graph forms a satisfying collection journey
 5. Color palettes evoke the cultural inspiration warmly
 
-## Decoration Rules - REQUIRED for each region:
+## Decoration Rules - REQUIRED for each region (IMMERSIVE & DENSE):
 
-Each region's **decorRules** must include:
+Each region's **decorRules** must create a rich, locally-curated environment that feels alive and themed to the dish/culture:
 
-1. **density** (0.3-1.0): Overall decoration density for the region
-2. **propThemes** (2-5 themes): Array of theme strings like ["forest", "coastal", "urban", "garden", "wilderness"]
-3. **clusters** (2-4 clusters): Array of dense decoration clusters, each with:
-   - **biome**: String describing the biome type (e.g., "forest", "meadow", "coastal", "garden")
-   - **center**: [x, y] tuple with grid coordinates for cluster center
-   - **radius**: Positive number (typically 3-8) defining the cluster area size
-   - **props**: Array of 2-4 prop strings that should appear in this cluster (e.g., ["trees", "flowers", "rocks"])
-   - **densityMultiplier**: Number between 0.5-3.0 (typically 1.5-2.5) for how much denser decorations should be in this cluster
+1. **density** (0.65-0.95): MUST be high density (0.65-0.95) to create immersive, curated spaces. Never use sparse densities below 0.65.
 
-**Cluster Placement Guidelines:**
-- Place clusters near POIs (points of interest) to make areas feel alive and immersive
-- Place clusters along paths to create visual interest during travel
-- Each cluster should have a distinct theme that matches the region's overall aesthetic
-- Cluster centers should be within the region's grid bounds
-- Clusters can overlap slightly but should feel distinct
-- Use densityMultiplier 1.5-2.0 for subtle emphasis, 2.0-2.5 for noticeable density, 2.5-3.0 for very dense areas
+2. **propThemes** (2-4 themes): MUST include 2-4 specific local themes that match the dish and region culture. Examples:
+   - Asian-inspired: "ramen_street", "bamboo_grove", "cherry_garden", "temple_path"
+   - Mediterranean: "olive_grove", "coastal_market", "stone_village", "herb_garden"
+   - Desert: "oasis_grove", "adobe_market", "cactus_field", "desert_market"
+   - Alpine: "alpine_village", "pine_forest", "mountain_path", "snow_garden"
+   - Tropical: "palm_grove", "beach_market", "tropical_garden", "coral_shore"
+   
+   Themes should be specific and evocative, not generic.
+
+3. **clusters** (3-6 clusters): MUST include 3-6 dense decoration clusters that create meaningful themed areas:
+   - **biome**: Specific biome type matching the region (e.g., "bamboo_forest", "desert_oasis", "alpine_meadow")
+   - **center**: Object with {x, y} coordinates for cluster center (place near POIs or along paths)
+   - **radius**: 4-10 (larger for major areas like markets, smaller for intimate spaces)
+   - **props**: Array of 2-5 prop names from the Prop Vocabulary (see below)
+   - **densityMultiplier**: 1.8-2.8 (higher for markets/docks, moderate for gardens/paths)
+
+**Cluster Types to Create:**
+- **Markets**: Dense with stalls, crates, barrels, lanterns, banners
+- **Shrine paths**: Lanterns, gates, stones, plants along the way
+- **Gardens**: Flowers, plants, stones, decorative elements
+- **Docks**: Barrels, crates, nets, ropes, lanterns
+- **Farms**: Plants, crates, tools, barrels
+- **Village areas**: Mixed props creating lived-in feeling
+
+**Prop Vocabulary** (use these exact names in cluster.props):
+- **Plants**: bamboo, cherry_tree, palm_tree, snow_pine, cactus, agave, grass_tuft, flowers, moss_rock
+- **Structures**: shrine_gate, adobe_wall, market_stall, noodle_stall
+- **Objects**: lantern, paper_banner, fishing_net, barrel, crate, stone, coral
+- **Natural**: stone, grass_tuft, flowers, moss_rock, coral
+
+**Placement Guidelines:**
+- Place clusters near POIs to make them feel lived-in and immersive
+- Place clusters along paths to create visual storytelling
+- Each cluster should tell a story (e.g., "busy market", "peaceful garden", "working dock")
+- Cluster centers should be within region grid bounds
+- Use higher densityMultiplier (2.2-2.8) for social/commercial areas
+- Use moderate densityMultiplier (1.8-2.2) for natural/peaceful areas
 
 Make the world feel like a vacation you'd want to take - full of discovery, friendly faces, and delicious possibilities.
 
