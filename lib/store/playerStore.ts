@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { ItemStack, Item, QuestChapter, QuestObjective } from '@/types/game';
+import type { PlayerAppearance } from '@/components/game/PlayerAvatar';
 import { useNotificationStore } from './notificationStore';
 import { useWorldStore } from './worldStore';
 
@@ -14,6 +15,9 @@ interface PlayerState {
   rotation: number;
   isMoving: boolean;
   moveDirection: { x: number; z: number };
+  
+  // Appearance
+  appearance: PlayerAppearance;
   
   // Inventory
   inventory: ItemStack[];
@@ -45,6 +49,7 @@ interface PlayerState {
   setRotation: (rot: number) => void;
   setMoving: (moving: boolean) => void;
   setMoveDirection: (dir: { x: number; z: number }) => void;
+  setAppearance: (appearance: PlayerAppearance) => void;
   
   // Inventory actions
   addItem: (item: Item, quantity?: number) => boolean;
@@ -95,6 +100,15 @@ const initialState = {
   isMoving: false,
   moveDirection: { x: 0, z: 0 },
   
+  appearance: {
+    skinTone: '#F6D2BE',
+    hairColor: '#3A2A20',
+    outfitColor: '#EAA6A6',
+    eyeColor: '#2D2D2D',
+    accessory: 'chef_hat' as const,
+    blushColor: '#F7A8B8',
+  } as PlayerAppearance,
+  
   inventory: [] as ItemStack[],
   maxInventorySlots: 24,
   
@@ -124,6 +138,7 @@ export const usePlayerStore = create<PlayerState>()(
     setRotation: (rot) => set({ rotation: rot }),
     setMoving: (moving) => set({ isMoving: moving }),
     setMoveDirection: (dir) => set({ moveDirection: dir }),
+    setAppearance: (appearance) => set({ appearance }),
     
     addItem: (item, quantity = 1) => {
       const { inventory, maxInventorySlots } = get();
@@ -431,6 +446,7 @@ export const usePlayerStore = create<PlayerState>()(
         collectedItemIds: state.collectedItemIds || [],
         npcConversationMemory: state.npcConversationMemory || {},
         npcRelationships: state.npcRelationships || {},
+        appearance: state.appearance || initialState.appearance,
       });
     },
     
