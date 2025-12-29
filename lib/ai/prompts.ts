@@ -180,9 +180,30 @@ Create a cohesive world where:
 4. The ingredient graph forms a satisfying collection journey
 5. Color palettes evoke the cultural inspiration warmly
 
+## Decoration Rules - REQUIRED for each region:
+
+Each region's **decorRules** must include:
+
+1. **density** (0.3-1.0): Overall decoration density for the region
+2. **propThemes** (2-5 themes): Array of theme strings like ["forest", "coastal", "urban", "garden", "wilderness"]
+3. **clusters** (2-4 clusters): Array of dense decoration clusters, each with:
+   - **biome**: String describing the biome type (e.g., "forest", "meadow", "coastal", "garden")
+   - **center**: [x, y] tuple with grid coordinates for cluster center
+   - **radius**: Positive number (typically 3-8) defining the cluster area size
+   - **props**: Array of 2-4 prop strings that should appear in this cluster (e.g., ["trees", "flowers", "rocks"])
+   - **densityMultiplier**: Number between 0.5-3.0 (typically 1.5-2.5) for how much denser decorations should be in this cluster
+
+**Cluster Placement Guidelines:**
+- Place clusters near POIs (points of interest) to make areas feel alive and immersive
+- Place clusters along paths to create visual interest during travel
+- Each cluster should have a distinct theme that matches the region's overall aesthetic
+- Cluster centers should be within the region's grid bounds
+- Clusters can overlap slightly but should feel distinct
+- Use densityMultiplier 1.5-2.0 for subtle emphasis, 2.0-2.5 for noticeable density, 2.5-3.0 for very dense areas
+
 Make the world feel like a vacation you'd want to take - full of discovery, friendly faces, and delicious possibilities.
 
-IMPORTANT: Ensure ALL required fields are present in your response. Do not omit ingredientGraph, questArcs, npcRoster, or colorSystem.`);
+IMPORTANT: Ensure ALL required fields are present in your response. Do not omit ingredientGraph, questArcs, npcRoster, colorSystem, or decorRules with clusters.`);
   
   return parts.join('\n\n');
 }

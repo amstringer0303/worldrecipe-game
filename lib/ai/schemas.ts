@@ -253,6 +253,13 @@ export const mapSpecSchema = z.object({
   decorRules: z.object({
     density: z.number().min(0).max(1).describe('0-1 density of decorations'),
     propThemes: z.array(z.string()).describe('Themes like forest, coastal, urban'),
+    clusters: z.array(z.object({
+      biome: z.string().describe('Biome type for this cluster'),
+      center: z.tuple([z.number(), z.number()]).describe('Center position [x, y] of the cluster'),
+      radius: z.number().positive().describe('Radius of the cluster area'),
+      props: z.array(z.string()).describe('Specific props to prioritize in this cluster'),
+      densityMultiplier: z.number().min(0.5).max(3.0).describe('Density multiplier for this cluster (0.5-3.0)'),
+    })).default([]).optional().describe('Dense decoration clusters for themed areas'),
   }).optional(),
 });
 
@@ -292,6 +299,13 @@ export const regionSpecSchema = z.object({
   decorRules: z.object({
     density: z.number().min(0).max(1),
     propThemes: z.array(z.string()),
+    clusters: z.array(z.object({
+      biome: z.string().describe('Biome type for this cluster'),
+      center: z.tuple([z.number(), z.number()]).describe('Center position [x, y] of the cluster'),
+      radius: z.number().positive().describe('Radius of the cluster area'),
+      props: z.array(z.string()).describe('Specific props to prioritize in this cluster'),
+      densityMultiplier: z.number().min(0.5).max(3.0).describe('Density multiplier for this cluster (0.5-3.0)'),
+    })).default([]).optional().describe('Dense decoration clusters for themed areas'),
   }).optional(),
 });
 

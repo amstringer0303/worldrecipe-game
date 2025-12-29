@@ -891,9 +891,48 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
     const fireflies: { pos: [number, number, number]; delay: number }[] = [];
     
     const { width, height } = mapSpec.grid;
-    const decorRules = region.decorRules || mapSpec.decorRules || { density: 0.3, propThemes: [] };
+    const decorRules = region.decorRules || mapSpec.decorRules || { density: 0.3, propThemes: [], clusters: [] };
     const density = decorRules.density || 0.3;
+    const clusters = decorRules.clusters || [];
     
+    // Helper function to check if a position is within a cluster
+    const isInCluster = (x: number, z: number): { cluster: typeof clusters[0] | null; distance: number } => {
+      for (const cluster of clusters) {
+        // Handle both tuple [x, y] and object {x, y} formats for backward compatibility
+        let cx: number, cz: number;
+        if (Array.isArray(cluster.center)) {
+          [cx, cz] = cluster.center;
+        } else if (typeof cluster.center === 'object' && cluster.center !== null) {
+          cx = (cluster.center as any).x || 0;
+          cz = (cluster.center as any).y || 0;
+        } else {
+          continue;
+        }
+        const distance = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(z - cz, 2));
+        if (distance <= cluster.radius) {
+          return { cluster, distance };
+        }
+      }
+      return { cluster: null, distance: Infinity };
+    };
+    
+    // Helper function to get prop type based on cluster props or fallback to themes
+    const getPropTypeFromCluster = (cluster: typeof clusters[0], random: () => number): string | null => {
+      if (cluster.props && cluster.props.length > 0) {
+        const prop = cluster.props[Math.floor(random() * cluster.props.length)];
+        // Map prop strings to our decoration types
+        const propLower = prop.toLowerCase();
+        if (propLower.includes('tree') || propLower.includes('forest')) return 'tree';
+        if (propLower.includes('bush') || propLower.includes('shrub')) return 'bush';
+        if (propLower.includes('rock') || propLower.includes('stone')) return 'rock';
+        if (propLower.includes('flower') || propLower.includes('bloom')) return 'flower';
+        if (propLower.includes('mushroom') || propLower.includes('fungus')) return 'mushroom';
+        if (propLower.includes('grass') || propLower.includes('meadow')) return 'grass';
+      }
+      return null;
+    };
+    
+    // Baseline decorations scattered across the whole region
     const numDecorations = Math.floor(width * height * density * 0.15);
     
     for (let i = 0; i < numDecorations; i++) {
@@ -912,6 +951,10 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
       });
       
       if (inWater || nearPOI) continue;
+      
+      // Check if in cluster - if so, skip baseline placement (will be handled by cluster logic)
+      const clusterInfo = isInCluster(x, z);
+      if (clusterInfo.cluster) continue;
       
       const type = random();
       if (type < 0.2) {
@@ -937,6 +980,86 @@ export function VoxelTerrain({ region, seed }: VoxelTerrainProps) {
         });
       } else {
         grassPatches.push([x, 0, z]);
+      }
+    }
+    
+    // Cluster decorations - dense placement within cluster areas
+    for (const cluster of clusters) {
+      // Handle both tuple [x, y] and object {x, y} formats for backward compatibility
+      let cx: number, cz: number;
+      if (Array.isArray(cluster.center)) {
+        [cx, cz] = cluster.center;
+      } else if (typeof cluster.center === 'object' && cluster.center !== null) {
+        cx = (cluster.center as any).x || 0;
+        cz = (cluster.center as any).y || 0;
+      } else {
+        continue; // Skip invalid cluster
+      }
+      const radius = cluster.radius || 5;
+      const densityMultiplier = cluster.densityMultiplier || 1.5;
+      
+      // Calculate cluster area and number of decorations
+      const clusterArea = Math.PI * radius * radius;
+      const clusterDensity = density * densityMultiplier;
+      const numClusterDecorations = Math.floor(clusterArea * clusterDensity * 0.2);
+      
+      for (let i = 0; i < numClusterDecorations; i++) {
+        // Random position within cluster radius
+        const angle = random() * Math.PI * 2;
+        const dist = Math.sqrt(random()) * radius; // sqrt for uniform distribution
+        const x = cx + Math.cos(angle) * dist;
+        const z = cz + Math.sin(angle) * dist;
+        
+        // Skip if outside region bounds
+        if (Math.abs(x) > width / 2 - 2 || Math.abs(z) > height / 2 - 2) continue;
+        
+        const inWater = mapSpec.terrain.waterBodies.some(wb => {
+          const [wbx, wby] = normalizePosition(wb.position);
+          const [wbw, wbh] = normalizeSize(wb.size);
+          return Math.abs(x - wbx) < wbw / 2 + 1 && Math.abs(z - wby) < wbh / 2 + 1;
+        });
+        
+        const nearPOI = allPois.some(poi => {
+          const [px, py] = normalizePosition(poi.position);
+          return Math.sqrt(Math.pow(x - px, 2) + Math.pow(z - py, 2)) < 4;
+        });
+        
+        if (inWater || nearPOI) continue;
+        
+        // Try to use cluster props, fallback to random type
+        const clusterPropType = getPropTypeFromCluster(cluster, random);
+        const type = random();
+        
+        let decorationPlaced = false;
+        if (clusterPropType === 'tree' || (!clusterPropType && type < 0.25)) {
+          trees.push({ 
+            pos: [x, 0, z], 
+            scale: 0.7 + random() * 0.5,
+            variant: Math.floor(random() * 3)
+          });
+          decorationPlaced = true;
+        } else if (clusterPropType === 'bush' || (!clusterPropType && type < 0.4)) {
+          bushes.push([x, 0, z]);
+          decorationPlaced = true;
+        } else if (clusterPropType === 'rock' || (!clusterPropType && type < 0.5)) {
+          rocks.push({ 
+            pos: [x, 0.15, z],
+            scale: 0.4 + random() * 0.5,
+            variant: Math.floor(random() * 4)
+          });
+          decorationPlaced = true;
+        } else if (clusterPropType === 'flower' || (!clusterPropType && type < 0.7)) {
+          flowers.push([x, 0, z]);
+          decorationPlaced = true;
+        } else if (clusterPropType === 'mushroom' || (!clusterPropType && type < 0.8)) {
+          mushrooms.push({
+            pos: [x, 0, z],
+            variant: Math.floor(random() * 4)
+          });
+          decorationPlaced = true;
+        } else if (clusterPropType === 'grass' || !decorationPlaced) {
+          grassPatches.push([x, 0, z]);
+        }
       }
     }
     
