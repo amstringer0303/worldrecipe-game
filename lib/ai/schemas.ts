@@ -222,6 +222,14 @@ export const sizeSchema = z.object({
   height: z.number().describe('Height'),
 });
 
+export const decorClusterSchema = z.object({
+  biome: z.string().describe('Biome type for this cluster'),
+  center: positionSchema.describe('Center position of the cluster'),
+  radius: z.number().positive().describe('Radius of the cluster area'),
+  props: z.array(z.string()).describe('Specific props to prioritize in this cluster'),
+  densityMultiplier: z.number().min(0.5).max(3.0).describe('Density multiplier for this cluster (0.5-3.0)'),
+});
+
 export const mapSpecSchema = z.object({
   grid: z.object({
     width: z.number().int().min(10).max(100).default(40),
@@ -253,13 +261,7 @@ export const mapSpecSchema = z.object({
   decorRules: z.object({
     density: z.number().min(0).max(1).describe('0-1 density of decorations'),
     propThemes: z.array(z.string()).describe('Themes like forest, coastal, urban'),
-    clusters: z.array(z.object({
-      biome: z.string().describe('Biome type for this cluster'),
-      center: z.tuple([z.number(), z.number()]).describe('Center position [x, y] of the cluster'),
-      radius: z.number().positive().describe('Radius of the cluster area'),
-      props: z.array(z.string()).describe('Specific props to prioritize in this cluster'),
-      densityMultiplier: z.number().min(0.5).max(3.0).describe('Density multiplier for this cluster (0.5-3.0)'),
-    })).default([]).optional().describe('Dense decoration clusters for themed areas'),
+    clusters: z.array(decorClusterSchema).default([]).optional().describe('Dense decoration clusters for themed areas'),
   }).optional(),
 });
 
@@ -299,13 +301,7 @@ export const regionSpecSchema = z.object({
   decorRules: z.object({
     density: z.number().min(0).max(1),
     propThemes: z.array(z.string()),
-    clusters: z.array(z.object({
-      biome: z.string().describe('Biome type for this cluster'),
-      center: z.tuple([z.number(), z.number()]).describe('Center position [x, y] of the cluster'),
-      radius: z.number().positive().describe('Radius of the cluster area'),
-      props: z.array(z.string()).describe('Specific props to prioritize in this cluster'),
-      densityMultiplier: z.number().min(0.5).max(3.0).describe('Density multiplier for this cluster (0.5-3.0)'),
-    })).default([]).optional().describe('Dense decoration clusters for themed areas'),
+    clusters: z.array(decorClusterSchema).default([]).optional().describe('Dense decoration clusters for themed areas'),
   }).optional(),
 });
 
@@ -407,6 +403,7 @@ export type Dish = z.infer<typeof dishSchema>;
 export type PortalType = z.infer<typeof portalTypeSchema>;
 export type POIType = z.infer<typeof poiTypeSchema>;
 export type POI = z.infer<typeof poiSchema>;
+export type DecorCluster = z.infer<typeof decorClusterSchema>;
 export type MapSpec = z.infer<typeof mapSpecSchema>;
 export type Palette = z.infer<typeof paletteSchema>;
 export type RegionInspiration = z.infer<typeof regionInspirationSchema>;
